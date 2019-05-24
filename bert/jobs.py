@@ -35,15 +35,12 @@ def sync_sounds():
   subprocesses executing copies of the fuction you're working inside.
   '''
   import audioread
-  import bs4
   import csv
   import librosa
   import os
   import requests
   import typing
   import zipfile
-
-  from bert import shortcuts
   '''
   Repeatability or idempotent functions go a long way with reducing your debug loop. In the commandline function of
   bert, you're provided with the option to flush the Redis database on every job start. This allows you to create
@@ -56,6 +53,8 @@ def sync_sounds():
 
   archive_path: str = os.path.join(OUTPUT_DIR, 'ae_dataset.zip')
   if not os.path.exists(archive_path):
+    # full dataset
+    #  https://data.vision.ee.ethz.ch/cvl/ae_dataset/ae_dataset.zip
     url: str = f'https://data.vision.ee.ethz.ch/cvl/ae_dataset/ae_dataset.zip'
     ologger.info(f'Downloading Sounds[{url}]')
     response = requests.get(url, stream=True, headers=HEADERS)
