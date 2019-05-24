@@ -114,8 +114,8 @@ def sync_sounds():
 
 
 @binding.follow(sync_sounds, pipeline_type=constants.PipelineType.BOTTLE)
-def batch_audio_data():
-  work_queue, done_queue, ologger = utils.comm_binders(batch_audio_data)
+def analyse_sound_files():
+  work_queue, done_queue, ologger = utils.comm_binders(analyse_sound_files)
   import librosa
   import numpy as np
 
@@ -124,6 +124,7 @@ def batch_audio_data():
     if details['class'] == 'test':
       continue
 
-    import ipdb; ipdb.set_trace()
+    # Begin work here
+    ologger.info('Nothing to do, exiting jobs')
     import sys; sys.exit(1)
 
