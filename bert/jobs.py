@@ -55,7 +55,7 @@ def sync_sounds():
   if not os.path.exists(archive_path):
     # full dataset
     #  https://data.vision.ee.ethz.ch/cvl/ae_dataset/ae_dataset.zip
-    url: str = f'https://data.vision.ee.ethz.ch/cvl/ae_dataset/ae_dataset.zip'
+    url: str = f'https://github.com/jbcurtin/bert/blob/d4a0e0792f093fd86708074c2ff14ef0040aa1d1/data/ae_dataset-subset.zip?raw=true'
     ologger.info(f'Downloading Sounds[{url}]')
     response = requests.get(url, stream=True, headers=HEADERS)
     with open(archive_path, 'wb') as stream:
