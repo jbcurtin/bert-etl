@@ -1,3 +1,4 @@
+import os
 import sys
 
 from setuptools import find_packages, setup
@@ -30,23 +31,40 @@ EXCLUDE_FROM_PACKAGES = ['bert.bin']
 version = '0.1.0'
 description = 'A microframework for simple ETL solutions'
 
+def read(fname):
+  with open(os.path.join(os.path.dirname(__file__), fname)) as f:
+    return f.read()
+
 setup(
   name='Bert',
   version=version,
   python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
   url='https://bert.jbcurtin.io/',
   author="Joseph Curtin <42@jbcurtin.io",
-  author_email='42@jbcurtin.io',
+  author_email='bert@jbcurtin.io',
   description=description,
   long_description=read('README.md'),
   license='MIT',
   packages=find_packages(exclude=EXCLUDE_FROM_PACKAGES),
   include_package_data=True,
   scripts=[
-    'bert/bin/generate-bert-module',
-    'bert/bin/bert-tutorial'
+    'bin/bert-runner.py',
   ],
-  classifiers=[],
+  install_requires=[
+    'librosa==0.6.3',
+    'docker==4.0.1',
+    'redis==3.2.1'
+  ],
+  zip_safe=False,
+  classifiers=[
+    'Framework :: Bert',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3 :: Only', 
+  ],
   project_urls={}
 )
 

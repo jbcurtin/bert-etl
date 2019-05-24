@@ -10,9 +10,11 @@ import json
 import multiprocessing
 import os
 import redis
+import shutil
 import subprocess
 import time
 import typing
+import types
 
 import requests
 
@@ -207,6 +209,22 @@ def build_dockerfile(dockerfile_dir: str, build_filename: str, build_name: str, 
         dockerfile=dockerfile_path,
         tag=docker_tag)
 
-def comm_binders(func):
+def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologger']:
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
     return Queue(func.work_key), Queue(func.done_key), ologger
+
+def new_module(options: typing.Any) -> None:
+  import bert
+  operating_dir: str = os.path.join(os.getcwd(), options.new_module)
+  if not os.path.exists(operating_dir):
+    os.makedirs(operating_dir)
+
+  bert_jobs_filepath: str = os.path.join(os.path.dirname(bert.__file__), 'jobs.py')
+  jobs_file: str = os.path.join(operating_dir, 'jobs.py')
+  if not os.path.exists(jobs_file):
+    shutil.copyfile(bert_jobs_filepath, jobs_file)
+
+  logger.info(f'''
+  Run the new module with the following command:
+  PYTHONPATH='.' bert-runner.py -j sync_sounds -m {options.new_module}
+  ''')

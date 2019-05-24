@@ -21,6 +21,7 @@ STOP_DAEMON: bool = False
 
 def capture_options() -> typing.Any:
   parser = argparse.ArgumentParser()
+  parser.add_argument('-n', '--new-module', default=None, required=False)
   parser.add_argument('-j', '--jobs', default=None, required=True)
   parser.add_argument('-d', '--debug', action='store_false', default=True)
   parser.add_argument('-m', '--module-name', default='bert')
@@ -35,12 +36,6 @@ def setup(options) -> None:
     logger.info(f'Flushing Redis DB[{constants.REDIS_DB}]')
     redis_client.flushdb()
     
-  if not os.path.exists(constants.CACHE_DIR):
-    os.makedirs(constants.CACHE_DIR)
-
-  if not os.path.exists(constants.WIKI_DUMP_DIR):
-    os.makedirs(constants.WIKI_DUMP_DIR)
-
 def scan_jobs(options):
   global JOBS
   module = importlib.import_module(f'{options.module_name}.jobs')

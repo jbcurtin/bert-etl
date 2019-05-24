@@ -1,2 +1,7 @@
 env
 sounds
+build
+dist
+env-test
+*.egg-info
+*.swp

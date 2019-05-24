@@ -51,6 +51,11 @@ def sync_sounds():
     ologger.info(f'Creating Directory[{OUTPUT_DIR}]')
     os.makedirs(OUTPUT_DIR)
 
+  '''
+  Sometimes repeatability requires code-duplication. When opening an archive, it could be a few gigabytes in size. If the archive isn't
+  open, the following code will open it to disk. If this function is ran a second time, it'll skip opening the files to disk and add the
+  files to queue.
+  ''' 
   archive_path: str = os.path.join(OUTPUT_DIR, 'ae_dataset.zip')
   if not os.path.exists(archive_path):
     # full dataset
@@ -125,6 +130,6 @@ def analyse_sound_files():
       continue
 
     # Begin work here
-    ologger.info('Nothing to do, exiting jobs')
-    import sys; sys.exit(1)
+    ologger.info('New to Bert? Check out the tutorial[pending]')
+    import sys; sys.exit(0)
 
