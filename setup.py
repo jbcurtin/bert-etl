@@ -39,7 +39,7 @@ setup(
   name='Bert',
   version=version,
   python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
-  url='https://bert.jbcurtin.io/',
+  url='https://github.com/jbcurtin/bert',
   author="Joseph Curtin <42@jbcurtin.io",
   author_email='bert@jbcurtin.io',
   description=description,
@@ -51,7 +51,6 @@ setup(
     'bin/bert-runner.py',
   ],
   install_requires=[
-    'librosa==0.6.3',
     'docker==4.0.1',
     'redis==3.2.1'
   ],

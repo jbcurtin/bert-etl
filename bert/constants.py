@@ -11,6 +11,7 @@ NOOP: str = 'noop'
 DNS: str = '8.8.8.8'
 ENCODING: str = 'utf-8'
 DEBUG: bool = False if os.environ.get('DEBUG', 'true') in ['f', 'false', 'no'] else True
+DELAY: int = .1
 
 REDIS_URL: str = os.environ.get('REDIS_URL', 'http://localhost:6379/4')
 _redis_parts: typing.Any = urlparse(REDIS_URL)
