@@ -4,7 +4,13 @@ A microframework for simple ETL solutions
 ## Begin with
 
 ```
-$ bert-runner.py -m bert -j sync_sounds -f
+$ virtualenv -p $(which python3) env
+$ source env/bin/activate
+$ pip install bert-etl
+$ pip install librosa # for demo project
+$ docker run -p 6379:6379 -d redis # bert-etl runs on redis to share data across CPUs
+$ bert-runner.py -n demo
+$ PYTHONPATH='.' bert-runner.py -m demo -j sync_sounds -f
 ```
 
 ## Fund Bounty Target Upgrades

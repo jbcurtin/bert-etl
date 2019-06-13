@@ -28,7 +28,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.1.0'
+version = '0.1.1'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -36,7 +36,7 @@ def read(fname):
     return f.read()
 
 setup(
-  name='Bert',
+  name='bert-etl',
   version=version,
   python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
   url='https://github.com/jbcurtin/bert',
@@ -62,7 +62,7 @@ setup(
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3 :: Only', 
+    'Programming Language :: Python :: 3 :: Only',
   ],
   project_urls={}
 )
