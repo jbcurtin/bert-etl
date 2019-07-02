@@ -27,3 +27,6 @@ logger = logging.getLogger(__name__)
 logger.info(f'DEBUG[{DEBUG}]')
 logger.info(f'RedisDB[{REDIS_DB}]')
 
+DOCKER_SERVICE_NAME: str = 'bert-etl-redis'
+DOCKER_REDIS_IMAGE: str = 'library/redis:latest'
+

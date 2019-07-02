@@ -19,6 +19,8 @@ from datetime import datetime
 
 from bert import constants
 
+from urllib.parse import urlparse, ParseResult
+
 logger = logging.getLogger(__name__)
 
 class QueuePacker(json.JSONEncoder):
@@ -38,9 +40,15 @@ class Queue:
   def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
     return json.loads(datum)
 
-  def __init__(self, redis_key):
+  def __init__(self, redis_key, redis_url: str=constants.REDIS_URL):
     self._key = redis_key
     self._redis_client = None
+
+    parts: ParseResult = urlparse(redis_url)
+    self._db = parts.path.strip('/')
+    self._host, self._port = parts.netloc.split(':')
+    self._port = int(self._port)
+    self._redis_client = redis.Redis(host=self._host, port=self._port, db=self._db)
 
   def __iter__(self):
     return self
@@ -53,9 +61,6 @@ class Queue:
     return value
 
   def peg(self, key: str, delay: str=DEFAULT_DELAY) -> bool:
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST, port=constants.REDIS_PORT, db=constants.REDIS_DB)
-
     value: str = self._redis_client.get(key)
     if value is None:
       self._redis_client.set(key, 1)
@@ -65,34 +70,21 @@ class Queue:
     return False
 
   def flushdb(self) -> None:
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST, port=constants.REDIS_PORT, db=constants.REDIS_DB)
-
     self._redis_client.flushdb()
 
   def put_block(self, value: str, delay: int=1728000) -> None:
     value_sorted = ''.join(sorted(value))
     value_sorted = ''.join(['put-block', value_sorted])
     value_hash = hashlib.md5(value_sorted.encode('utf-8')).hexdigest()
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST, port=constants.REDIS_PORT, db=constants.REDIS_DB)
-
     if self._redis_client.get(value_hash) is None:
       self._redis_client.set(value_hash, 1)
       self._redis_client.expire(value_hash, delay)
       self.put(value)
 
   def size(self) -> int:
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST, port=constants.REDIS_PORT, db=constants.REDIS_DB)
-
     return int(self._redis_client.llen(self._key))
 
   def get(self) -> typing.Dict[str, typing.Any]:
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST,
-          port=constants.REDIS_PORT, db=constants.REDIS_DB)
-
     try:
       value: str = self._redis_client.lpop(self._key).decode('utf-8')
     except AttributeError:
@@ -103,16 +95,10 @@ class Queue:
 
   def put(self, value: typing.Dict[str, typing.Any]) -> None:
     value: str = self.__class__.Pack(value)
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST,
-          port=constants.REDIS_PORT, db=constants.REDIS_DB)
 
     self._redis_client.rpush(self._key, value.encode('utf-8'))
 
   def bulk(self, stop_iter_key: str, bulk_count: int=50000) -> typing.List[str]:
-    if self._redis_client is None:
-      self._redis_client = redis.Redis(host=constants.REDIS_HOST,
-          port=constants.REDIS_PORT, db=constants.REDIS_DB)
 
     index: int = 0
     datums: typing.List[str] = []

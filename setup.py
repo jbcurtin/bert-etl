@@ -28,7 +28,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.1.1'
+version = '0.2.0'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -56,7 +56,7 @@ setup(
   ],
   zip_safe=False,
   classifiers=[
-    'Framework :: Bert',
+    # 'Framework :: Bert',
     'Operating System :: OS Independent',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
