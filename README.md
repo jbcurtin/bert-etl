@@ -13,6 +13,16 @@ $ bert-runner.py -n demo
 $ PYTHONPATH='.' bert-runner.py -m demo -j sync_sounds -f
 ```
 
+## Release Notes
+
+### 0.2.1
+* Added Release Notes
+
+### 0.2.0
+
+* Added Redis Service auto run. Using docker, redis will be pulled and started in the background
+* Added Redis Service channels, sometimes you'll want to run to etl-jobs on the same machine
+
 ## Fund Bounty Target Upgrades
 
 Bert provides a boiler plate framework that'll allow one to write concurrent ETL code using Pythons' `microprocessing` module. One function starts the process, piping data into a Redis backend that'll then be consumed by the next function. The queues are respectfully named for the scope of the function: Work(start) and Done(end) queue. Please consider contributing to Bert Bounty Targets to improve this documentation
