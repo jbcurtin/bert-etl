@@ -113,6 +113,9 @@ def start_jobs(options):
             else:
               raise err
 
+          else:
+            break
+
           job_restart_count += 1
         else:
           logger.exception(f'Job[{job}] failed {job_restart_count} times')
