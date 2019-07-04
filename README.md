@@ -15,7 +15,12 @@ $ PYTHONPATH='.' bert-runner.py -m demo -j sync_sounds -f
 
 ## Release Notes
 
+### 0.3.0
+
+* Added Error Management. When an error occurs, bert-runner will log the error and re-run the job. If the same error happens often enough, the job will be aborted
+
 ### 0.2.1
+
 * Added Release Notes
 
 ### 0.2.0

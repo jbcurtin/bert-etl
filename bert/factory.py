@@ -2,6 +2,7 @@
 
 import argparse
 import docker
+import functools
 import importlib
 import logging
 import multiprocessing
@@ -33,6 +34,9 @@ def capture_options() -> typing.Any:
   parser.add_argument('-f', '--flush-db', action='store_true', default=False)
   parser.add_argument('-c', '--channel', default=0, type=int, help="Redis DB[0-16]; Default 0")
   parser.add_argument('-r', '--redis-port', default=6379, type=int)
+  parser.add_argument('-l', '--log-error-only', default=True, action="store_false")
+  parser.add_argument('-e', '--restart-job', default=True, action="store_false")
+  parser.add_argument('-a', '--max-restart', default=10, type=int)
   return parser.parse_args()
 
 def setup(options: argparse.Namespace) -> None:
@@ -95,9 +99,27 @@ def start_jobs(options):
       logger.info(f'Running Job[{job.func_space}] as [{job.pipeline_type.value}] for [{job.__name__}]')
       logger.info(f'Job worker count[{job.workers}]')
       processes: typing.List[multiprocessing.Process] = []
+
+      @functools.wraps(job)
+      def _job_runner(*args, **kwargs):
+        job_restart_count: int = 0
+        while job_restart_count < options.max_restart:
+          try:
+            job(*args, **kwargs)
+          except Exception as err:
+            if options.log_error_only:
+              logger.exception(err)
+
+            else:
+              raise err
+
+          job_restart_count += 1
+        else:
+          logger.exception(f'Job[{job}] failed {job_restart_count} times')
+
       for idx in range(0, job.workers):
         logging.info(f'Spawning Process[{idx}]')
-        proc: multiprocessing.Process = multiprocessing.Process(target=job, args=())
+        proc: multiprocessing.Process = multiprocessing.Process(target=_job_runner, args=())
         proc.daemon = True
         proc.start()
         processes.append(proc)
