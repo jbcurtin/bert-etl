@@ -36,9 +36,9 @@ def capture_options() -> typing.Any:
   return parser.parse_args()
 
 def setup(options: argparse.Namespace) -> None:
-  from bert import constants, datatypes
+  from bert import constants, datasource
   docker_client: typing.Any = docker.from_env()
-  redis_connection: datatypes.RedisConnection = datatypes.RedisConnection.ParseURL(constants.REDIS_URL)
+  redis_connection: datasource.RedisConnection = datasource.RedisConnection.ParseURL(constants.REDIS_URL)
   if not constants.DOCKER_SERVICE_NAME in [c.name for c in docker_client.containers.list()]:
     logger.info('Starting RedisClient')
     try:

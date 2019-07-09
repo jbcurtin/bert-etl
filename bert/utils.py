@@ -17,11 +17,12 @@ import requests
 
 from datetime import datetime
 
-from bert import constants, datatypes
+from bert import constants, datasource
 
 from urllib.parse import urlparse, ParseResult
 
 logger = logging.getLogger(__name__)
+PWN = typing.TypeVar('PWN')
 
 class QueuePacker(json.JSONEncoder):
   def default(self, obj):
@@ -29,6 +30,29 @@ class QueuePacker(json.JSONEncoder):
       return obj.strftime(constants.DATETIME_FORMAT)
 
     return super(QueuePacker, self).default(obj)
+
+class Across:
+  '''
+  Sometimes checking to see if something exists arcoss processes is required to complete a job. Knowing where it exists is faster than searching for where it might exist in space.
+  '''
+
+  def __init__(self) -> None:
+    self._conn: datasource.RedisConnection = datasource.RedisConnection.ParseURL(constants.REDIS_URL)
+
+  def __enter__(self, redis_key: str) -> PWN:
+    self._key = redis_key
+    return self
+
+  def __exit__(self, type, value, tb) -> PWN:
+    self._key = None
+    return self
+
+  def exists(self) -> bool:
+    value: typing.Any = self._conn.client.get(self._key)
+    if value:
+      return True
+
+    return False
 
 class Queue:
   DEFAULT_DELAY: int = 1728000
@@ -42,7 +66,7 @@ class Queue:
 
   def __init__(self, redis_key: str):
     self._key = redis_key
-    self._redis_client = datatypes.RedisConnection.ParseURL(constants.REDIS_URL).client
+    self._redis_client = datasource.RedisConnection.ParseURL(constants.REDIS_URL).client
 
   def __iter__(self):
     return self
