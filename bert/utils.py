@@ -227,12 +227,12 @@ def new_module(options: typing.Any) -> None:
 
   logger.info(f'''
   Run the new module with the following command:
-  PYTHONPATH='.' bert-runner.py -j sync_sounds -m {options.new_module}
+  bert-runner.py -j sync_sounds -m {options.new_module}
   ''')
 
 def show_how(options: typing.Any) -> None:
   logger.info('''
   Run the new module with the following command:
-  PYTHONPATH='.' bert-runner.py -j <job_name> -m <module_name>
+  bert-runner.py -j <job_name> -m <module_name>
   ''')
 

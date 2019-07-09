@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+import os
 import sys
 
 from bert import factory, utils
 
 if __name__ in ['__main__']:
+  sys.path.append(os.getcwd())
   options = factory.capture_options()
   if options.how:
     utils.show_how(options)
