@@ -17,7 +17,7 @@ import requests
 
 from datetime import datetime
 
-from bert import constants
+from bert import constants, datatypes
 
 from urllib.parse import urlparse, ParseResult
 
@@ -40,15 +40,9 @@ class Queue:
   def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
     return json.loads(datum)
 
-  def __init__(self, redis_key, redis_url: str=constants.REDIS_URL):
+  def __init__(self, redis_key: str):
     self._key = redis_key
-    self._redis_client = None
-
-    parts: ParseResult = urlparse(redis_url)
-    self._db = parts.path.strip('/')
-    self._host, self._port = parts.netloc.split(':')
-    self._port = int(self._port)
-    self._redis_client = redis.Redis(host=self._host, port=self._port, db=self._db)
+    self._redis_client = datatypes.RedisConnection.ParseURL(constants.REDIS_URL).client
 
   def __iter__(self):
     return self

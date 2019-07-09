@@ -13,8 +13,6 @@ import typing
 import types
 
 
-from bert import constants, utils
-
 from datetime import datetime
 
 from docker.errors import APIError
@@ -32,30 +30,28 @@ def capture_options() -> typing.Any:
   parser.add_argument('-m', '--module-name', default='bert')
   parser.add_argument('-o', '--how', default=False, action='store_true')
   parser.add_argument('-f', '--flush-db', action='store_true', default=False)
-  parser.add_argument('-c', '--channel', default=0, type=int, help="Redis DB[0-16]; Default 0")
-  parser.add_argument('-r', '--redis-port', default=6379, type=int)
   parser.add_argument('-l', '--log-error-only', default=True, action="store_false")
   parser.add_argument('-e', '--restart-job', default=True, action="store_false")
   parser.add_argument('-a', '--max-restart', default=10, type=int)
   return parser.parse_args()
 
 def setup(options: argparse.Namespace) -> None:
-  from bert import constants
+  from bert import constants, datatypes
   docker_client: typing.Any = docker.from_env()
+  redis_connection: datatypes.RedisConnection = datatypes.RedisConnection.ParseURL(constants.REDIS_URL)
   if not constants.DOCKER_SERVICE_NAME in [c.name for c in docker_client.containers.list()]:
     logger.info('Starting RedisClient')
     try:
       docker_client.containers.run('library/redis:latest', name=constants.DOCKER_SERVICE_NAME, detach=True, ports={
-      6379: options.redis_port
+      6379: redis_connection.port
     })
     except APIError as err:
       logger.info("Redis is already running under another service-name. Let's use that.")
 
   if options.flush_db:
     import redis
-    redis_client = redis.Redis(host=constants.REDIS_HOST, port=constants.REDIS_PORT, db=options.channel)
-    logger.info(f'Flushing Redis DB[{options.channel}]')
-    redis_client.flushdb()
+    logger.info(f'Flushing Redis DB[{redis_connection.db}]')
+    redis_connection.client.flushdb()
 
 def scan_jobs(options):
   global JOBS
@@ -86,7 +82,7 @@ def handle_signal(sig, frame):
 
 def start_jobs(options):
   signal.signal(signal.SIGINT, handle_signal)
-  from bert import binding
+  from bert import binding, constants
   if constants.DEBUG:
     job_chain: typing.List[types.FunctionType] = binding.build_job_chain()
     for job in job_chain:
