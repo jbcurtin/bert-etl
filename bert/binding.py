@@ -1,6 +1,8 @@
 import functools
 import hashlib
 import logging
+import marshmallow
+# import marshmallow.schema.UnmarshalResult
 import multiprocessing
 import os
 import types
@@ -15,7 +17,12 @@ NOOP_SPACE: str = hashlib.sha1(constants.NOOP.encode(ENCODING)).hexdigest()
 logger = logging.getLogger(__name__)
 
 # Bert, a microframework for simple ETL solution that helps
-def follow(parent_func: typing.Union[str, types.FunctionType], pipeline_type: constants.PipelineType = constants.PipelineType.BOTTLE, workers: int = multiprocessing.cpu_count()):
+def follow(
+  parent_func: typing.Union[str, types.FunctionType],
+  pipeline_type: constants.PipelineType = constants.PipelineType.BOTTLE,
+  workers: int = multiprocessing.cpu_count(),
+  schema: marshmallow.Schema = None):
+
   if isinstance(parent_func, str):
     parent_func_space = hashlib.sha1(parent_func.encode(ENCODING)).hexdigest()
     parent_func_work_key = hashlib.sha1(''.join([parent_func_space, 'work']).encode(ENCODING)).hexdigest()
@@ -61,6 +68,9 @@ def follow(parent_func: typing.Union[str, types.FunctionType], pipeline_type: co
 
     if getattr(wrapped_func, 'workers', None) is None:
       wrapped_func.workers = workers if pipeline_type == constants.PipelineType.CONCURRENT else 1
+
+    if getattr(wrapped_func, 'schema', None) is None:
+      wrapped_func.schema = schema
 
     @functools.wraps(wrapped_func)
     def _wrapper(*args, **kwargs):

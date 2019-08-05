@@ -25,14 +25,14 @@ STOP_DAEMON: bool = False
 def capture_options() -> typing.Any:
   parser = argparse.ArgumentParser()
   parser.add_argument('-n', '--new-module', default=None, required=False)
-  parser.add_argument('-j', '--jobs', default=None, required=False)
-  parser.add_argument('-d', '--debug', action='store_false', default=True)
   parser.add_argument('-m', '--module-name', default='bert')
   parser.add_argument('-o', '--how', default=False, action='store_true')
   parser.add_argument('-f', '--flush-db', action='store_true', default=False)
   parser.add_argument('-l', '--log-error-only', default=True, action="store_false")
   parser.add_argument('-e', '--restart-job', default=True, action="store_false")
   parser.add_argument('-a', '--max-restart', default=10, type=int)
+  parser.add_argument('-w', '--web-service', default=False, action='store_true')
+  parser.add_argument('-d', '--web-service-daemon', default=False, action='store_true')
   return parser.parse_args()
 
 def setup(options: argparse.Namespace) -> None:
@@ -78,7 +78,22 @@ def handle_signal(sig, frame):
     import sys; sys.exit(0)
 
   else:
-    logger.info('Unhandled Signal[{sig}]')
+    logger.info(f'Unhandled Signal[{sig}]')
+
+def start_webservice(options: 'Namespace') -> None:
+  signal.signal(signal.SIGINT, handle_signal)
+  from bert import binding, constants, utils, remote_webservice
+  logger.info(f'Starting WebService[{constants.SERVICE_NAME}]. Debug[{constants.DEBUG}]')
+  remote_webservice.setup_service()
+  remote_webservice.run_service()
+
+def start_daemon(options: 'Namespace') -> None:
+  signal.signal(signal.SIGINT, handle_signal)
+  DELAY: float = 0.1
+  from bert import binding, constants, utils, remote_daemon
+  logger.info(f'Starting service[{constants.SERVICE_NAME}] Daemon. Debug[{constants.DEBUG}]')
+  remote_daemon.setup_service()
+  remote_daemon.run_service()
 
 def start_jobs(options):
   signal.signal(signal.SIGINT, handle_signal)
@@ -127,10 +142,23 @@ def start_jobs(options):
         while not STOP_DAEMON and any([proc.is_alive() for proc in processes]):
           time.sleep(constants.DELAY)
 
-if __name__ in ['__main__']:
+def start_service(options: argparse.Namespace) -> None:
+  setup(options)
+  scan_jobs(options)
   options = capture_options()
   setup(options)
   scan_jobs(options)
-  validate_jobs(options)
-  start_jobs(options)
+  # validate_jobs(options)
+  if options.web_service:
+    start_webservice(options)
+
+  elif options.web_service_daemon:
+    start_daemon(options)
+
+  else:
+    start_jobs(options)
+
+if __name__ in ['__main__']:
+  options = capture_options()
+  start_service(options)
 
