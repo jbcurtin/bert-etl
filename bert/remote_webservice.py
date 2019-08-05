@@ -24,8 +24,11 @@ MIDDLEWARE.secret_key = constants.WWW_SECRET
 MIDDLEWARE.debug = constants.DEBUG
 
 def setup_service() -> flask.Flask:
-  if constants.SERVICE_NAME == constants.SERVICE_NAME_DEFAULT:
-    raise InvalidServiceName
+  if constants.SERVICE_NAME == None:
+    raise NotImplementedError('Missing ENVVar[SERVICE_NAME]')
+
+  if constants.SERVICE_HOST == None:
+    raise NotImplementedError(f'Missing ENVVar[SERVICE_HOST]')
 
   job_chain: typing.List[types.FunctionType] = binding.build_job_chain()
   noop_queue: utils.Queue = utils.Queue(binding.NOOP_SPACE)

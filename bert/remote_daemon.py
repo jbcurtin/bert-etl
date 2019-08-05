@@ -19,13 +19,18 @@ def handle_signal(sig, frame):
     logger.info(f'Unhandled Signal[{sig}]')
 
 def setup_service() -> None:
-  nonce: str = 'aoeu'
-  url: str = 'http://localhost:7000/video-miner.register'
-  if constants.SERVICE_NAME == constants.SERVICE_NAME_DEFAULT:
-    raise InvalidServiceName
+  if constants.SERVICE_NAME == None:
+    raise NotImplementedError('Missing ENVVar[SERVICE_NAME]')
 
-  remote_utils.RemoteConfig.Update({'nonce': nonce})
-  response = requests.post(url, data=json.dumps({'nonce': nonce}), headers={
+  if constants.MAIN_SERVICE_NONCE is None:
+    raise NotImplementedError(f'Missing ENVVar[MAIN_SERVICE_NONCE]')
+
+  if constants.MAIN_SERVICE_HOST is None:
+    raise NotImplementedError(f'Missing ENVVar[MAIN_SERVICE_HOST]')
+
+  remote_utils.RemoteConfig.Update({'nonce': constants.MAIN_SERVICE_NONCE})
+  url: str = f'{constants.MAIN_SERVICE_HOST}/{constants.SERVICE_NAME}.register'
+  response = requests.post(url, data=json.dumps({'nonce': constants.MAIN_SERVICE_NONCE}), headers={
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   })
