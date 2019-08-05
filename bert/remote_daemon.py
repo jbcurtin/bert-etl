@@ -1,11 +1,13 @@
 import json
+import logging
 import requests
 import time
 
-from bert import remote_utils, constants, binding, utils
+from bert import remote_utils, constants, binding, utils, remote_callback
 
 DELAY: float = .1
 STOP_DAEMON: bool = False
+logger = logging.getLogger(__name__)
 
 def handle_signal(sig, frame):
   if sig == 2:
@@ -38,6 +40,7 @@ def run_service():
     job_chain: typing.List[types.FunctionType] = binding.build_job_chain()
     noop_queue: utils.Queue = utils.Queue(binding.NOOP_SPACE)
     job_queue: utils.Queue = utils.Queue(job_chain[0].work_key)
+
     while STOP_DAEMON is False:
       try:
         details: typing.Dict[str, typing.Any] = next(noop_queue)
@@ -50,4 +53,9 @@ def run_service():
         for job in job_chain:
           logger.info(f'Running Job[{job.func_space}] as [{job.pipeline_type.value}] for [{job.__name__}]')
           job()
+
+        else:
+          tail_queue: utils.Queue = utils.Queue(job.done_key)
+          for details in tail_queue:
+            remote_callback.submit(constants.SERVICE_NAME, details)
 
