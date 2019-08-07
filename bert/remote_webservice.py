@@ -1,8 +1,10 @@
 import flask
 import hashlib
+import importlib
 import marshmallow
 import marshmallow.fields
 import logging
+import types
 
 from bert import constants, binding, utils, exceptions, remote_exceptions, remote_utils, remote_callback
 
@@ -22,8 +24,26 @@ MIDDLEWARE: DispatcherMiddleware = DispatcherMiddleware(NotFound(), {
 })
 MIDDLEWARE.secret_key = constants.WWW_SECRET
 MIDDLEWARE.debug = constants.DEBUG
+JOBS: [str, types.FunctionType] = {}
 
-def setup_service() -> flask.Flask:
+def load_service_module(service_module: str) -> '__module__':
+  try:
+    module = importlib.import_module(f'{constants.SERVICE_MODULE}.jobs')
+  except ImportError:
+    raise NotImplementedError(f'Unable to find Service Module[{constants.SERVICE_MODULE}]. Is it in PythonPath?')
+
+  for member_name in dir(module):
+    if member_name.startswith('_'):
+      continue
+
+    member = getattr(module, member_name)
+    if type(member) != types.FunctionType:
+      continue
+
+    if hasattr(member, 'func_space'):
+      JOBS[member_name] = member
+
+def setup_service() -> DispatcherMiddleware:
   if constants.SERVICE_NAME == None:
     raise NotImplementedError('Missing ENVVar[SERVICE_NAME]')
 
@@ -90,8 +110,9 @@ def setup_service() -> flask.Flask:
 
     return flask.Response('{}', content_type='application/json', status=200)
 
-  return APP
+  return MIDDLEWARE
+
 
 def run_service() -> DispatcherMiddleware:
-  run_simple('0.0.0.0', 8000, MIDDLEWARE, use_reloader=False)
+  run_simple('0.0.0.0', constants.WWW_PORT, MIDDLEWARE, use_reloader=False)
 

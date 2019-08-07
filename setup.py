@@ -28,7 +28,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.4.0'
+version = '0.4.12'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -51,8 +51,8 @@ setup(
     'bin/bert-runner.py',
   ],
   install_requires=[
-    'docker==4.0.1',
-    'redis==3.2.1'
+    'redis==3.3.5',
+    'marshmallow==2.19.5',
   ],
   zip_safe=False,
   classifiers=[

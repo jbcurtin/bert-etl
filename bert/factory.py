@@ -1,7 +1,6 @@
 #!/usr/env/bin python
 
 import argparse
-import docker
 import functools
 import importlib
 import logging
@@ -14,8 +13,6 @@ import types
 
 
 from datetime import datetime
-
-from docker.errors import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +34,7 @@ def capture_options() -> typing.Any:
 
 def setup(options: argparse.Namespace) -> None:
   from bert import constants, datasource
-  docker_client: typing.Any = docker.from_env()
   redis_connection: datasource.RedisConnection = datasource.RedisConnection.ParseURL(constants.REDIS_URL)
-  if not constants.DOCKER_SERVICE_NAME in [c.name for c in docker_client.containers.list()]:
-    logger.info('Starting RedisClient')
-    try:
-      docker_client.containers.run('library/redis:latest', name=constants.DOCKER_SERVICE_NAME, detach=True, ports={
-      6379: redis_connection.port
-    })
-    except APIError as err:
-      logger.info("Redis is already running under another service-name. Let's use that.")
 
   if options.flush_db:
     import redis

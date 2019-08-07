@@ -5,6 +5,7 @@ import time
 
 from bert import remote_utils, constants, binding, utils, remote_callback
 
+STARTUP_DELAY: float = 1.0
 DELAY: float = .1
 STOP_DAEMON: bool = False
 logger = logging.getLogger(__name__)
@@ -29,12 +30,25 @@ def setup_service() -> None:
     raise NotImplementedError(f'Missing ENVVar[MAIN_SERVICE_HOST]')
 
   remote_utils.RemoteConfig.Update({'nonce': constants.MAIN_SERVICE_NONCE})
-  url: str = f'{constants.MAIN_SERVICE_HOST}/{constants.SERVICE_NAME}.register'
-  response = requests.post(url, data=json.dumps({'nonce': constants.MAIN_SERVICE_NONCE}), headers={
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-  })
-  response.raise_for_status()
+  for retry_attempt in range(0, 10):
+    url: str = f'{constants.MAIN_SERVICE_HOST}/{constants.SERVICE_NAME}.register'
+    response = requests.post(url, data=json.dumps({'nonce': constants.MAIN_SERVICE_NONCE}), headers={
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    })
+    if not response.status_code in [200]:
+      logger.exception({
+        'url': url,
+        'contents': response.json()
+      })
+      logger.info(f'Retrying in {STARTUP_DELAY} seconds')
+      time.sleep(STARTUP_DELAY)
+
+    else:
+      break
+
+  else:
+    response.raise_for_status()
 
 
 def run_service():

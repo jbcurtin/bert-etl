@@ -1,7 +1,6 @@
 #!/usr/env/bin python
 
 import logging
-import docker
 import hashlib
 import json
 import multiprocessing
@@ -191,24 +190,6 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
     return proc.stderr.read().decode(constants.ENCODING)
 
   return proc.stdout.read().decode('utf-8')
-
-def build_dockerfile(dockerfile_dir: str, build_filename: str, build_name: str, version: str='latest') -> typing.Tuple[docker.DockerClient, str]:
-  client = docker.DockerClient()
-  dockerfile_path = os.path.join(dockerfile_dir, build_filename)
-  if not os.path.exists(dockerfile_path):
-    raise IOError(f'Missing Dockerfile[{dockerfile_path}]')
-
-  docker_tags: typing.List[str] = [item for sublist in [image.tags for image in client.images.list()] for item in sublist]
-  docker_tag = f'{build_name}:{version}'
-  if not docker_tag in docker_tags \
-      or constants.DOCKER_NO_CACHE:
-    ologger = logging.getLogger('.'.join([__name__,'build_dockerfile', multiprocessing.current_process().name]))
-    ologger.info(f'Building Docker Image[{docker_tag}]')
-    client.images.build(
-        nocache=constants.DOCKER_NO_CACHE,
-        path=dockerfile_dir,
-        dockerfile=dockerfile_path,
-        tag=docker_tag)
 
 def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologger']:
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))

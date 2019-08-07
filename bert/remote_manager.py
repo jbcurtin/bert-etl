@@ -41,7 +41,7 @@ def register(
       result = RegisterSchema().load(data=flask.request.form)
 
     else:
-      raise remote_exceptions.BadRequest(f'Unable to read data', {}, 400)
+      raise remote_exceptions.BadRequest(f'Invalid Content-Type', {}, 400)
 
     if result.errors:
       raise remote_exceptions.BadRequest(f'Unable to register microservice', result.errors, 400)
@@ -61,7 +61,7 @@ def register(
       else:
         content: str = response.content
 
-      raise remote_exceptions.BadRequest(f'Microservice is Offline', {'errors': [{'content': content, 'status': response.status_code}]}, 422)
+      raise remote_exceptions.BadRequest(f'Microservice is Offline', {'errors': [{'url': SERVICE_CONNECTIONS[service_name]['shake_url'], 'content': content, 'status': response.status_code}]}, 422)
 
     return flask.Response('{}', content_type='application/json', status=200)
 
