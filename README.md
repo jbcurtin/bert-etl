@@ -3,6 +3,8 @@ A microframework for simple ETL solutions
 
 ## Begin with
 
+Lets begin with an example of loading data from a file-server and than loading it into numpy arrays
+
 ```
 $ virtualenv -p $(which python3) env
 $ source env/bin/activate
