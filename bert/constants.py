@@ -35,6 +35,9 @@ else:
   REMOTE_CONFIG_SPACE: str = 'remote-config-space'
   REMOTE_CONFIG_KEYS: str = []
 
+# Cloud vars
+USE_DYNAMODB: bool = True if os.environ.get('USE_DYNAMODB', 'false').lower() in ['t', 'yes', 'true'] else False 
+
 class PipelineType(enum.Enum):
   BOTTLE: str = 'Bottle'
   CONCURRENT: str = 'Concurrent'

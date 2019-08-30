@@ -1,7 +1,11 @@
 #!/usr/env/bin python
 
+import boto3
+import collections
+import copy
 import logging
 import hashlib
+import importlib
 import json
 import multiprocessing
 import os
@@ -52,6 +56,115 @@ class Across:
       return True
 
     return False
+
+def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
+    if isinstance(datum, dict):
+        return 'M'
+
+    elif isinstance(datum, list):
+        return 'L'
+
+    elif isinstance(datum, bytes):
+        return 'B'
+
+    elif isinstance(datum, str):
+        return 'S'
+
+    else:
+        import ipdb; ipdb.set_trace()
+        raise NotImplementedError
+
+def _encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
+    if isinstance(datum, dict):
+        for key, value in datum.items():
+            datum[key] = {_find_aws_encoding(value): _encode_aws_object(value)}
+
+        return datum
+
+    elif isinstance(datum, (list, tuple, types.GeneratorType)):
+        for idx, value in enumerate(datum):
+            datum[idx] = {_find_aws_encoding(value): _encode_aws_object(value)}
+
+        return datum
+
+    else:
+        return datum
+
+def _decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
+    for encoding_type, encoded in datum.items():
+        if encoding_type == 'M':
+            for key, value, in encoded.items():
+                encoded[key] = _decode_aws_object(value)
+
+            return encoded
+
+        elif encoding_type == 'L':
+            for idx, value in enumerate(encoded):
+                encoded[idx] = _decode_aws_object(value)
+
+            return encoded
+
+        elif encoding_type == 'B':
+            return encoded
+
+        elif encoding_type == 'S':
+            return encoded
+
+        else:
+            import ipdb; ipdb.set_trace()
+            raise NotImplementedError
+
+
+class AWSQueue:
+    DEFAULT_DELAY: int = 1728000
+    @staticmethod
+    def Pack(datum: typing.Dict[str, typing.Any]) -> str:
+        """
+        Dict -> AWS Dict -> json.dumps
+        """
+        _encode_aws_object(datum)
+        return datum
+
+    @staticmethod
+    def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
+        """
+        AWS Dynamodb Dict -> Dict
+        """
+        return _decode_aws_object(datum)
+
+    _key: str = None
+    def __init__(self: PWN, key: str) -> None:
+        self._key = key
+
+    def __iter__(self) -> PWN:
+        return self
+
+    def __next__(self) -> typing.Any:
+        value = self.get()
+        if value is None or value == 'STOP':
+            raise StopIteration
+
+        return value
+
+    def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
+        combined: str = ''.join(sorted(json.dumps(value)))
+        identity: str = hashlib.sha256(combined.encode('utf-8')).hexdigest()
+        value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
+        client: typing.Any = boto3.client('dynamodb')
+        client.put_item(TableName=self._key, Item=value)
+
+    def get(self: PWN) -> typing.Dict[str, typing.Any]:
+        client: typing.Any = boto3.client('dynamodb')
+        try:
+            value: typing.Any = client.scan(TableName=self._key, Select='ALL_ATTRIBUTES', Limit=1)['Items'][0]
+        except IndexError:
+            raise StopIteration
+        
+        else:
+            unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
+            client.delete_item(TableName=self._key, Key={'identity': value['identity']})
+            return unpacked
+
 
 class Queue:
   DEFAULT_DELAY: int = 1728000
@@ -132,6 +245,25 @@ class Queue:
     logging.info(len(datums))
     return datums
 
+def scan_jobs(options) -> typing.Dict[str, typing.Any]:
+    jobs: typing.Dict[str, typing.Any] = collections.OrderedDict()
+    module = importlib.import_module(f'{options.module_name}.jobs')
+    for member_name in dir(module):
+        if member_name.startswith('_'):
+            continue
+
+        member = getattr(module, member_name)
+        if type(member) != types.FunctionType:
+            continue
+
+        if not hasattr(member, 'done_key') or not hasattr(member, 'work_key'):
+            continue
+
+        logger.info(f'Member[{member_name}]')
+        jobs[member_name] = member
+
+    return jobs
+
 def find_in_elem(elem, *args) -> str:
   base = elem
   for key in args:
@@ -193,6 +325,9 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
 
 def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologger']:
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
+    if constants.USE_DYNAMODB:
+        return AWSQueue(func.work_key), AWSQueue(func.done_key), ologger
+
     return Queue(func.work_key), Queue(func.done_key), ologger
 
 def new_module(options: typing.Any) -> None:

@@ -11,6 +11,7 @@ import time
 import typing
 import types
 
+from bert import utils as bert_utils
 
 from datetime import datetime
 
@@ -40,19 +41,6 @@ def setup(options: argparse.Namespace) -> None:
     import redis
     logger.info(f'Flushing Redis DB[{redis_connection.db}]')
     redis_connection.client.flushdb()
-
-def scan_jobs(options):
-  global JOBS
-  module = importlib.import_module(f'{options.module_name}.jobs')
-  for member_name in dir(module):
-    if member_name.startswith('_'):
-      continue
-
-    member = getattr(module, member_name)
-    if type(member) != types.FunctionType:
-      continue
-
-    JOBS[member_name] = member
 
 def validate_jobs(options) -> None:
   for job in options.jobs.split(','):
@@ -131,11 +119,11 @@ def start_jobs(options):
           time.sleep(constants.DELAY)
 
 def start_service(options: argparse.Namespace) -> None:
+  global JOBS
   setup(options)
-  scan_jobs(options)
   options = capture_options()
   setup(options)
-  scan_jobs(options)
+  JOBS = bert_utils.scan_jobs(options)
   # validate_jobs(options)
   if options.web_service:
     start_webservice(options)

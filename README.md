@@ -34,6 +34,29 @@ Bert provides a boiler plate framework that'll allow one to write concurrent ETL
 
 https://www.patreon.com/jbcurtin
 
-## More to come
-Documentation is being worked on
+
+## Roadmap
+
+* Create configuration file, `bert-etl.yaml`
+* Support conda venv
+* Support pyenv venv
+* Support dynamodb flush
+* Support multipule invocations per AWS account
+
+
+## Tutorial Roadmap
+
+* Introduce Bert API
+* Explain `bert.binding`
+* Explain `comm_binder`
+* Explain `work_queue`
+* Explain `done_queue`
+* Explain `ologger`
+* Explain `DEBUG` and how turning it off allows for x-concurrent processes
+* Show an example on how to load timeseries data, calcualte the mean, and display the final output of the mean
+* Expand the example to show how to scale the application implicitly
+* Show how to run locally using Redis
+* Show how to run locally without Redis, using Dynamodb instead
+* Show how to run remotly using AWSLambda and Dynamodb 
+* Talk about dynamodb and eventual consistency
 
