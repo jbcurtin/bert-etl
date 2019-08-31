@@ -15,8 +15,8 @@ import types
 
 from datetime import datetime
 
-from bert_deploy import utils as bert_deploy_utils
 from bert import utils as bert_utils
+from bert.deploy import utils as bert_deploy_utils
 
 logger = logging.getLogger(__name__)
 

@@ -114,8 +114,7 @@ def _decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
             import ipdb; ipdb.set_trace()
             raise NotImplementedError
 
-
-class AWSQueue:
+class DynamodbQueue:
     DEFAULT_DELAY: int = 1728000
     @staticmethod
     def Pack(datum: typing.Dict[str, typing.Any]) -> str:
@@ -158,13 +157,48 @@ class AWSQueue:
         try:
             value: typing.Any = client.scan(TableName=self._key, Select='ALL_ATTRIBUTES', Limit=1)['Items'][0]
         except IndexError:
-            raise StopIteration
-        
+            return None
+
         else:
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
             client.delete_item(TableName=self._key, Key={'identity': value['identity']})
             return unpacked
 
+class StreamingQueue(DynamodbQueue):
+    """
+    When deploying functions to AWS Lambda, auto-invocation is available as an option to run the functions. With StreamingQueue, we want to push local objects into
+        the available API already utilized. We also want to keep the available `put` function so that the `done_queue` api will still push contents into the next `work_queue`.
+        We'll also argment the local `get` function api and only pull from records local to the stream and not pull from dynamodb.
+    """
+    _key: str = None
+    # Share the memory across invocations, within the same process/thread. This allows for
+    #   comm_binders to be called multipule-times and still pull from the same queue
+    _queue: typing.List[typing.Dict[str, typing.Any]] = []
+    def __init__(self: PWN, key: str) -> None:
+        self._key = key
+
+    def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
+        print('Putting Record')
+        print(json.dumps(record))
+        self._queue.append(copy.deepcopy(record))
+        print('queue len', id(self), len(self._queue))
+
+    def get(self: PWN) -> typing.Dict[str, typing.Any]:
+        print('Getting Record')
+        print('queue len', id(self), len(self._queue))
+        try:
+            value: typing.Any = self._queue.pop(0)
+        except IndexError:
+            return None
+
+        else:
+            print('value')
+            print(value)
+            unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(value['datum'])
+            print(unpacked)
+            client = boto3.client('dynamodb')
+            client.delete_item(TableName=self._key, Key={'identity': value['identity']})
+            return unpacked
 
 class Queue:
   DEFAULT_DELAY: int = 1728000
@@ -246,7 +280,7 @@ class Queue:
     return datums
 
 def scan_jobs(options) -> typing.Dict[str, typing.Any]:
-    jobs: typing.Dict[str, typing.Any] = collections.OrderedDict()
+    jobs: typing.Dict[str, typing.Any] = {}
     module = importlib.import_module(f'{options.module_name}.jobs')
     for member_name in dir(module):
         if member_name.startswith('_'):
@@ -259,10 +293,27 @@ def scan_jobs(options) -> typing.Dict[str, typing.Any]:
         if not hasattr(member, 'done_key') or not hasattr(member, 'work_key'):
             continue
 
-        logger.info(f'Member[{member_name}]')
         jobs[member_name] = member
 
-    return jobs
+    # Order the jobs correctly
+    ordered = collections.OrderedDict()
+    while len(ordered.keys()) != len(jobs.keys()):
+        if len(ordered.keys()) == 0:
+            for job_name, job in jobs.items():
+                if job.parent_func == 'noop':
+                    ordered[job_name] = job
+                    break
+
+            else:
+                raise NotImplementedError(f'NoopSpace not found')
+
+        else:
+            latest: types.FunctionType = [item for item in ordered.values()][-1]
+            for job_name, job in jobs.items():
+                if job.parent_func == latest:
+                    ordered[job_name] = job
+                    break
+    return ordered
 
 def find_in_elem(elem, *args) -> str:
   base = elem
@@ -324,11 +375,23 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
   return proc.stdout.read().decode('utf-8')
 
 def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologger']:
+    print('comm_binders.QueueType')
+    print(constants.QueueType)
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
-    if constants.USE_DYNAMODB:
-        return AWSQueue(func.work_key), AWSQueue(func.done_key), ologger
+    if constants.QueueType is constants.QueueTypes.Dynamodb:
+        return DynamodbQueue(func.work_key), DynamodbQueue(func.done_key), ologger
 
-    return Queue(func.work_key), Queue(func.done_key), ologger
+    elif constants.QueueType is constants.QueueTypes.StreamingQueue:
+        return StreamingQueue(func.work_key), StreamingQueue(func.done_key), ologger
+
+    # elif constants.QueueType is constants.QueueTypes.DynamodbStreamBottle:
+    #     return DynamodbStreamQueue(func.work_key), DynamodbStreamBottleQueue(func.done_key), ologger
+
+    elif constants.QueueType is constants.QueueTypes.Redis:
+        return Queue(func.work_key), Queue(func.done_key), ologger
+
+    else:
+        raise NotImplementedError(constants.QueueType)
 
 def new_module(options: typing.Any) -> None:
   import bert

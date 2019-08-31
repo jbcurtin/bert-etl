@@ -3,7 +3,7 @@
 import os
 import sys
 
-from bert_deploy import factory
+from bert.deploy import factory
 
 if __name__ in ['__main__']:
   sys.path.append(os.getcwd())

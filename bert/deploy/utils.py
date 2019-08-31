@@ -12,7 +12,7 @@ import types
 import typing
 import zipfile
 
-from bert_deploy import shortcuts as bert_deploy_shortcuts
+from bert.deploy import shortcuts as bert_deploy_shortcuts
 
 from botocore.errorfactory import ClientError
 
@@ -100,18 +100,48 @@ def get_conda_venv():
 
 def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: str, excludes: typing.List[str] = COMMON_EXCLUDES) -> typing.Dict[str, typing.Any]:
     confs: typing.Dict[str, typing.Any] = {}
+    bert_configuration = bert_deploy_shortcuts.load_local_configuration()
+
     for job_name, job in jobs.items():
+        env_vars: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
+            bert_configuration.get('every_lambda', {'environment': {}})['environment'],
+            bert_configuration.get(job_name, {'environment': {}})['environment'])
+        env_vars['QUEUE_TYPE'] = env_vars.get('QUEUE_TYPE', 'dynamodb')
+        runtime: str = bert_configuration.get('runtime', 'python3.6')
+        try:
+            memory_size: str = int(bert_configuration.get('memory_size', '512'))
+        except ValueError:
+            raise NotImplementedError('MemorySize must be an integer')
+
         project_path: str = tempfile.mkdtemp(prefix=f'bert-etl-project-{job_name}')
         logger.info(f'Creating Project Path[{project_path}]')
+        job_templates: str = ''.join([f"""def {jn}():
+    pass
+""" for jn in jobs.keys() if jn != job_name])
+
+        job_follow: str = inspect.getsource(job).split('\n')[0]
         job_source: str = '\n'.join(inspect.getsource(job).split('\n')[2:])
-        job_template: str = """def %s(event, context=None):
-    import logging,json
-    logger = logging.getLogger(__name__)
-    logger.info('Awesome')
-    logger.info(json.dumps(event))
+        job_template: str = """
+%s
+import typing
+from bert import utils, constants, binding, shortcuts
+%s
+def %s(event, context=None):
+
+    records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
+    if len(records) > 0:
+        constants.QueueType = constants.QueueTypes.StreamingQueue
+        work_queue, done_queue, ologger = utils.comm_binders(%s)
+        for record in records:
+            if record['eventName'].lower() == 'INSERT'.lower():
+                work_queue.local_put(record['dynamodb']['NewImage'])
+
+    else:
+        work_queue, done_queue, ologger = utils.comm_binders(%s)
+
 %s
     return {}
-""" % (job_name, job_source)
+""" % (job_templates, job_follow, job_name, job_name, job_name, job_source)
         job_path: str = os.path.join(project_path, f'{job_name}.py')
 
         with open(job_path, 'w') as stream:
@@ -124,10 +154,10 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
         confs[job_name] = {
                 'project-path': project_path,
                 'table-name': f'{job_name}-stream',
-                'runtime': 'python3.7',
-                'environment': {
-                    'USE_DYNAMODB': 'true',
-                },
+                # 'runtime': 'python3.7',
+                'runtime': runtime,
+                'memory-size': memory_size, # must be a multiple of 64, increasing memory size also increases cpu allocation
+                'environment': env_vars,
                 'handler-name': f'{job_name}.{job_name}',
                 'spaces': {
                     'work-key': job.work_key,
@@ -282,37 +312,32 @@ def create_lambda_roles(lambdas: typing.Dict[str, typing.Any]) -> None:
     policy_document: typing.Dict[str, typing.Any] = {
         "Version": "2012-10-17",
         "Statement": [
+            # {
+            #     "Effect": "Allow",
+            #     "Action": [
+            #         "xray:PutTraceSegments",
+            #         "xray:PutTelemetryRecords",
+            #     ],
+            #     "Resource": ["*"],
+            # },
+            # {
+            #     "Effect": "Allow",
+            #     "Action": [
+            #         "lambda:InvokeFunction"
+            #     ],
+            #     "Resource": ["*"],
+            # },
             {
                 "Effect": "Allow",
                 "Action": [
-                    "xray:PutTraceSegments",
-                    "xray:PutTelemetryRecords",
+                    "dynamodb:*",
                 ],
-                "Resource": ["*"],
+                "Resource": "arn:aws:dynamodb:*:*:table/*",
             },
             {
                 "Effect": "Allow",
-                "Action": [
-                    "lambda:InvokeFunction"
-                ],
-                "Resource": ["*"],
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "dynamodb:BatchGetItem",
-                    "dynamodb:GetItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan",
-                    "dynamodb:BatchWriteItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:GetRecords",
-                    "dynamodb:GetShardIterator",
-                    "dynamodb:DescribeStream",
-                    "dynamodb:ListStreams",
-                ],
-                "Resource": "arn:aws:dynamodb:*:*:*",
+                "Action": "s3:*",
+                "Resource": "*"
             },
             {
                 "Effect": "Allow",
@@ -350,6 +375,7 @@ def create_lambda_roles(lambdas: typing.Dict[str, typing.Any]) -> None:
         iam_client.create_policy(**iam_policy)
         policy = bert_deploy_shortcuts.map_iam_policy(policy_name)
         iam_client.attach_role_policy(RoleName=trust_policy_name, PolicyArn=policy['Arn'])
+
     for job_name, conf in lambdas.items():
         conf['iam-role'] = role
         conf['iam-policy'] = policy
@@ -372,6 +398,7 @@ def upload_lambdas(lambdas: typing.Dict[str, typing.Any]) -> None:
             lambda_description = client.create_function(
                 FunctionName=lambda_name,
                 Runtime=conf['runtime'],
+                MemorySize=conf['memory-size'],
                 Role=conf['iam-role']['Arn'],
                 Handler=conf['handler-name'],
                 Code={
@@ -388,6 +415,7 @@ def upload_lambdas(lambdas: typing.Dict[str, typing.Any]) -> None:
             client.create_function(
                 FunctionName=lambda_name,
                 Runtime=conf['runtime'],
+                MemorySize=conf['memory-size'],
                 Role=conf['iam-role']['Arn'],
                 Handler=conf['handler-name'],
                 Code={

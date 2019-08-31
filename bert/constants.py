@@ -42,6 +42,25 @@ class PipelineType(enum.Enum):
   BOTTLE: str = 'Bottle'
   CONCURRENT: str = 'Concurrent'
 
+class QueueTypes(enum.Enum):
+    Dynamodb: str = 'dynamodb'
+    # Used to invoke asynchronous lambdas
+    StreamingQueue: str = 'streaming-queue'
+    Redis: str = 'redis'
+
+QueueType: str = os.environ.get('QUEUE_TYPE', 'redis')
+if QueueType.lower() in ['dynamodb']:
+    QueueType = QueueTypes.Dynamodb
+
+elif QueueType.lower() in ['streaming-queue']:
+    QueueType = QueueTypes.StreamingQueue
+
+elif QueueType.lower() in ['redis']:
+    QueueType = QueueTypes.Redis
+
+else:
+    raise NotImplementedError(f'QueueType not found[{QueueType}]')
+
 logger = logging.getLogger(__name__)
 logger.info(f'DEBUG[{DEBUG}]')
 
