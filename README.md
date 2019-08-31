@@ -44,6 +44,8 @@ https://www.patreon.com/jbcurtin
 * Support pyenv venv
 * Support dynamodb flush
 * Support multipule invocations per AWS account
+* Support undeploy AWS Lambda
+* Support Bottle functions in AWS Lambda
 
 
 ## Tutorial Roadmap
