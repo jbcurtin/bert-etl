@@ -26,6 +26,12 @@ COMMON_EXCLUDES: typing.List[str] = ['env', 'lambdas']
 
 logger = logging.getLogger(__name__)
 
+def _calc_lambda_name(lambda_name: str) -> str:
+    return lambda_name
+
+def _calc_table_name(lambda_key: str) -> str:
+    return lambda_key
+
 def copytree(src: str, dest: str, metadata: bool = True, symlinks: bool = False, ignore: typing.Any = None) -> None:
     if not os.path.exists(dest):
         os.makedirs(dest)
@@ -151,7 +157,7 @@ def %s(event, context=None):
         copytree(os.getcwd(), project_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
         logger.info(f'Merging Job[{job_name}] Site Packages')
         copytree(venv_path, project_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
-        confs[job_name] = {
+        confs[_calc_lambda_name(job_name)] = {
                 'project-path': project_path,
                 'table-name': f'{job_name}-stream',
                 # 'runtime': 'python3.7',
@@ -230,12 +236,36 @@ def build_lambda_archives(jobs: typing.Dict[str, types.FunctionType]) -> str:
 
     return lambdas
 
+def destroy_dynamodb_tables(jobs: typing.Dict[str, typing.Any]) -> None:
+    table: typing.Any = None
+    client = boto3.client('dynamodb')
+    for job_name, job in jobs.items():
+        work_table_name: str = _calc_table_name(job.work_key)
+        done_table_name: str = _calc_table_name(job.done_key)
+
+        try:
+            client.delete_table(TableName=work_table_name)
+        except ClientError as err:
+            pass
+
+        else:
+            logger.info(f'Destorying Table[{work_table_name}]')
+
+        try:
+            client.delete_table(TableName=done_table_name)
+        except ClientError as err:
+            pass
+
+        else:
+            logger.info(f'Destorying Table[{done_table_name}]')
+
+
 def build_dynamodb_tables(lambdas: typing.Dict[str, typing.Any]) -> None:
     table: typing.Any = None
     client = boto3.client('dynamodb')
     for lambda_name, conf in lambdas.items():
-        work_table_name: str = f'{conf["spaces"]["work-key"]}'
-        done_table_name: str = f'{conf["spaces"]["done-key"]}'
+        work_table_name: str = _calc_table_name(conf['spaces']['work-key'])
+        done_table_name: str = _calc_table_name(conf["spaces"]["done-key"])
 
         try:
             conf['work-table'] = client.describe_table(TableName=work_table_name)
@@ -387,6 +417,19 @@ def destory_lambda_to_table_bindings(lambdas: typing.Dict[str, typing.Any]) -> N
                 EventSourceArn=conf['work-table']['Table']['LatestStreamArn'],
                 FunctionName=lambda_name)['EventSourceMappings']:
             client.delete_event_source_mapping(UUID=event_mapping['UUID'])
+
+def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('lambda')
+    for job_name, job in jobs.items():
+        lambda_name: str = _calc_lambda_name(job_name)
+        try:
+            client.delete_function(FunctionName=lambda_name)
+        except ClientError as err:
+            pass
+
+        else:
+            logger.info(f'Deleting function[{lambda_name}]')
+
 
 def upload_lambdas(lambdas: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')

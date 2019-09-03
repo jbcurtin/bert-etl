@@ -25,15 +25,31 @@ class Service(enum.Enum):
     AWSLambda: str = 'aws-lambda'
 
 def capture_options() -> typing.Any:
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-s', '--service', default=Service.AWSLambda, type=Service)
-  parser.add_argument('-m', '--module-name', default='bert')
-  return parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--service', default=Service.AWSLambda, type=Service)
+    parser.add_argument('-u', '--undeploy', action="store_true", default=False)
+    parser.add_argument('-i', '--invoke', action="store_true", default=False)
+    parser.add_argument('-m', '--module-name', default='bert')
+    return parser.parse_args()
 
 def deploy_service(options) -> None:
     jobs: typing.Dict[str, typing.Any] = bert_utils.scan_jobs(options)
 
     if options.service == Service.AWSLambda:
+        if options.undeploy:
+            bert_deploy_utils.destroy_dynamodb_tables(jobs)
+            bert_deploy_utils.destroy_lambdas(jobs)
+            import sys; sys.exit(0)
+
+        if options.invoke:
+            import boto3
+            client = boto3.client('lambda')
+            conf = lambdas[[item for item in lambdas.keys()][0]]
+            client.invoke(
+                    FunctionName=conf['aws-lambda']['FunctionName'],
+                    InvocationType='Event')
+            import sys; sys.exit(0)
+
         lambdas: typing.Dict[str, typing.Any] = bert_deploy_utils.build_lambda_archives(jobs)
         bert_deploy_utils.build_dynamodb_tables(lambdas)
         bert_deploy_utils.create_lambda_roles(lambdas)
@@ -41,12 +57,6 @@ def deploy_service(options) -> None:
         bert_deploy_utils.upload_lambdas(lambdas)
         bert_deploy_utils.bind_lambdas_to_tables(lambdas)
 
-        import boto3
-        client = boto3.client('lambda')
-        conf = lambdas[[item for item in lambdas.keys()][0]]
-        client.invoke(
-                FunctionName=conf['aws-lambda']['FunctionName'],
-                InvocationType='Event')
         import ipdb; ipdb.set_trace()
         pass
 
