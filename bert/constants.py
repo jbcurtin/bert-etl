@@ -48,7 +48,7 @@ class QueueTypes(enum.Enum):
     StreamingQueue: str = 'streaming-queue'
     Redis: str = 'redis'
 
-QueueType: str = os.environ.get('QUEUE_TYPE', 'redis')
+QueueType: str = os.environ.get('BERT_QUEUE_TYPE', 'redis')
 if QueueType.lower() in ['dynamodb']:
     QueueType = QueueTypes.Dynamodb
 
