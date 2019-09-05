@@ -48,6 +48,7 @@ setup(
   packages=find_packages(exclude=EXCLUDE_FROM_PACKAGES),
   include_package_data=True,
   scripts=[
+    'bin/bert-deploy.py',
     'bin/bert-runner.py',
   ],
   install_requires=[
