@@ -135,6 +135,7 @@ def start_service(options: argparse.Namespace) -> None:
     start_jobs(options)
 
 def run_from_cli():
+    import sys, os
     sys.path.append(os.getcwd())
     options = capture_options()
     start_service(options)

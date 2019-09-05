@@ -71,6 +71,7 @@ def deploy_service(options) -> None:
         raise NotImplementedError(options.service)
 
 def run_from_cli():
+    import sys, os
     sys.path.append(os.getcwd())
     options = capture_options()
     deploy_service(options)
