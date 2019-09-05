@@ -31,7 +31,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-i', '--invoke', action="store_true", default=False)
     parser.add_argument('-m', '--module-name', default='bert')
     parser.add_argument('-f', '--flush', default=False, action="store_true")
-    parser.add_argument('-d', '--dry-run', default=False, action="store_true")
+    parser.add_argument('-d', '--dry-run', default=False, action="store_true", help="Create the lambda functions and output ./lambdas without deploying to AWS")
     return parser.parse_args()
 
 def deploy_service(options) -> None:
