@@ -61,6 +61,11 @@ elif QueueType.lower() in ['redis']:
 else:
     raise NotImplementedError(f'QueueType not found[{QueueType}]')
 
+if os.environ.get('AWS_EXECUTION_ENV', None) is None:
+    AWS_LAMBDA_FUNCTION: bool = False
+else:
+    AWS_LAMBDA_FUNCTION: bool = True
+
 logger = logging.getLogger(__name__)
 logger.info(f'DEBUG[{DEBUG}]')
 
