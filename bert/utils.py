@@ -375,7 +375,7 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
   return proc.stdout.read().decode('utf-8')
 
 def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologger']:
-    logger.info('Bert Queue Type[{constants.QueueType}]')
+    logger.info(f'Bert Queue Type[{constants.QueueType}]')
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
     if constants.QueueType is constants.QueueTypes.Dynamodb:
         return DynamodbQueue(func.work_key), DynamodbQueue(func.done_key), ologger
