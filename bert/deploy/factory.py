@@ -30,6 +30,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-u', '--undeploy', action="store_true", default=False)
     parser.add_argument('-i', '--invoke', action="store_true", default=False)
     parser.add_argument('-m', '--module-name', default='bert')
+    parser.add_argument('-t', '--tables', default=False, action="store_true")
     return parser.parse_args()
 
 def deploy_service(options) -> None:
@@ -51,6 +52,10 @@ def deploy_service(options) -> None:
             import sys; sys.exit(0)
 
         lambdas: typing.Dict[str, typing.Any] = bert_deploy_utils.build_lambda_archives(jobs)
+        if options.tables:
+            bert_deploy_utils.build_dynamodb_tables(lambdas)
+            import sys; sys.exit(0)
+
         bert_deploy_utils.build_dynamodb_tables(lambdas)
         bert_deploy_utils.create_lambda_roles(lambdas)
         bert_deploy_utils.destory_lambda_to_table_bindings(lambdas)
