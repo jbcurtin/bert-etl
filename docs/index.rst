@@ -2,7 +2,7 @@
 bert-etl Documentation
 ######################
 
-`bert-etl` introduces a developer friendly API that abstracts away multiprocessing, AWS Lambda, and future deployment targets. Lets start with an example
+`bert-etl` introduces a developer friendly API that abstracts away multiprocessing, AWS Lambda, and future deployment targets. Lets start with an example, `example/jobs.py`
 
 
 .. code-block:: python
@@ -57,4 +57,14 @@ bert-etl Documentation
                 os.remove(filepath)
                 ologger.error(f'Invalid Hash[{file_hash.hexdigest()}]')
     
-    
+
+With the above script and using redis, we can download files concurrently in seperate processes. 
+
+.. code-block:: bash
+
+
+    $ docker run -p 6379:6379 -d redis
+    $ bert-runner.py -m example
+
+
+Be careful though, wikipedia will ratelimit you. It works better with S3 or other CDNs
