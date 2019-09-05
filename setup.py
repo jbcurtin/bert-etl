@@ -36,27 +36,33 @@ def read(fname):
     return f.read()
 
 setup(
-  name='bert-etl',
-  version=version,
-  python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
-  url='https://github.com/jbcurtin/bert',
-  author="Joseph Curtin <42@jbcurtin.io",
-  author_email='bert@jbcurtin.io',
-  description=description,
-  long_description=read('README.md'),
-  license='MIT',
-  packages=find_packages(exclude=EXCLUDE_FROM_PACKAGES),
-  include_package_data=True,
-  scripts=[
-    'bin/bert-deploy.py',
-    'bin/bert-runner.py',
-  ],
-  install_requires=[
-    'redis==3.3.5',
-    'marshmallow==2.19.5',
-  ],
-  zip_safe=False,
-  classifiers=[
+    name='bert-etl',
+    version=version,
+    python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
+    url='https://github.com/jbcurtin/bert',
+    author="Joseph Curtin <42@jbcurtin.io",
+    author_email='bert@jbcurtin.io',
+    description=description,
+    long_description=read('README.md'),
+    license='MIT',
+    packages=find_packages(exclude=EXCLUDE_FROM_PACKAGES),
+    include_package_data=True,
+    scripts=[
+        'bin/bert-deploy.py',
+        'bin/bert-runner.py',
+    ],
+    install_requires=[
+        'redis==3.3.5',
+        'marshmallow==2.19.5',
+    ],
+    entry_points={
+        'console_scripts': [
+            'bert-deploy.py = bert.deploy.factory:run_from_cli',
+            'bert-runner.py = bert.factory:run_from_cli',
+        ]
+    },
+    zip_safe=False,
+    classifiers=[
     # 'Framework :: Bert',
     'Operating System :: OS Independent',
     'Programming Language :: Python',

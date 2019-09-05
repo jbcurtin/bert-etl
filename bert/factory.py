@@ -134,7 +134,10 @@ def start_service(options: argparse.Namespace) -> None:
   else:
     start_jobs(options)
 
-if __name__ in ['__main__']:
-  options = capture_options()
-  start_service(options)
+def run_from_cli():
+    sys.path.append(os.getcwd())
+    options = capture_options()
+    start_service(options)
 
+if __name__ in ['__main__']:
+    run_from_cli()
