@@ -86,10 +86,10 @@ def get_current_venv(excludes: typing.List[str] = []):
         return None
 
     venv = os.environ['VIRTUAL_ENV']
-    egg_links: typing.List[str] = []
+    # egg_links: typing.List[str] = []
     temp_package_path: str = tempfile.mkdtemp(prefix='bert-etl-packages')
     site_package_dir: str = find_site_packages_dir(venv, 'site-packages')
-    egg_links.extend(glob.glob(os.path.join(site_package_dir, '*.egg-link')))
+    # egg_links.extend(glob.glob(os.path.join(site_package_dir, '*.egg-link')))
 
     excludes = ZIP_EXCLUDES + excludes + ['lamdbas']
     logger.info(f'Creating Site-Packages Path[{temp_package_path}]')
@@ -100,9 +100,15 @@ def get_pyenv_venv():
     if not os.path.exists('.python-version'):
         return None
 
-def get_conda_venv():
-    import ipdb; ipdb.set_trace()
-    raise NotImplementedError
+def get_conda_venv(excludes: typing.List[str] = []):
+    from distutils.sysconfig import get_python_lib
+    python_lib: str = get_python_lib()
+    if 'conda/envs' in python_lib or 'miniconda/envs' in python_lib:
+        temp_package_path: str = tempfile.mkdtemp(prefix='bert-etl-packages')
+        excludes = ZIP_EXCLUDES + excludes + ['lamdbas']
+        logger.info(f'Creating Site-Packages Path[{temp_package_path}]')
+        copytree(python_lib, temp_package_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
+        return temp_package_path
 
 def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: str, excludes: typing.List[str] = COMMON_EXCLUDES) -> typing.Dict[str, typing.Any]:
     confs: typing.Dict[str, typing.Any] = {}
