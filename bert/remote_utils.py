@@ -49,28 +49,32 @@ class GetData(collections.namedtuple('GetData', ['data'])):
     return cls(data={key: value for key, value in flask.request.args.items() if value})
 
 class PostData(collections.namedtuple('PostData', ['data'])):
-  @classmethod
-  def Obtain(cls: PWN, schema: marshmallow.Schema = None) -> PWN:
-    if flask.request.headers.get('Content-Type', DEFAULT_CONTENT_TYPE) in [
-      'application/x-www-form-urlencoded',
-      'application/x-www-form-urlencoded; charset=UTF-8',
-      'application/x-www-form-urlencoded; charset=utf-8']:
-      data: typing.Dict[str, typing.Any] = {key: value for key, value in flask.request.form.items()}
+    @classmethod
+    def Obtain(cls: PWN, schema: marshmallow.Schema = None) -> PWN:
+        content_type: str = flask.request.headers.get('Content-Type', None)
+        if content_type in [
+            'application/x-www-form-urlencoded',
+            'application/x-www-form-urlencoded; charset=UTF-8',
+            'application/x-www-form-urlencoded; charset=utf-8']:
+            data: typing.Dict[str, typing.Any] = {key: value for key, value in flask.request.form.items()}
 
-    elif flask.request.headers.get('Content-Type', DEFAULT_CONTENT_TYPE) in ['application/json']:
-      data: typing.Dict[str, typing.Any] = {key: value for key, value in flask.request.json.items()}
+        elif content_type in [
+            'application/json',
+            'application/json;charset=UTF-8',
+            'application/json;charset=utf-8']:
+            data: typing.Dict[str, typing.Any] = {key: value for key, value in flask.request.json.items()}
 
-    else:
-      raise NotImplementedError(flask.request.headers.get('Content-Type', DEFAULT_CONTENT_TYPE))
+        else:
+            raise NotImplementedError(f'ContentType[{content_type}]')
 
-    if schema is None:
-      return cls(data=data)
+        if schema is None:
+            return cls(data=data)
 
-    result: marshmallow.schema.UnmarshalResult = schema().load(data)
-    if result.errors:
-      raise remote_exceptions.BadRequest('Unable to parse input', result.errors, 400)
+            result: marshmallow.schema.UnmarshalResult = schema().load(data=data)
+            if result.errors:
+                raise tuner_exceptions.TerribleRequest('Unable to parse input', result.errors, 400)
 
-    return cls(data=data)
+        return cls(data=data)
 
 def build_auth_token(service_name: str, entropy: str) -> str:
   noop_space: str = hashlib.sha1(constants.NOOP.encode(constants.ENCODING)).hexdigest()
