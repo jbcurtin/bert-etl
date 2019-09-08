@@ -1,3 +1,5 @@
+[![Documentation Status](https://readthedocs.org/projects/bert-etl/badge/?version=latest)](https://bert-etl.readthedocs.io/en/latest/?badge=latest)
+
 # Bert
 A microframework for simple ETL solutions
 
