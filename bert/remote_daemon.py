@@ -10,6 +10,12 @@ DELAY: float = .1
 STOP_DAEMON: bool = False
 logger = logging.getLogger(__name__)
 
+SENTRY_DSN: str = os.environ.get('SENTRY_DSN', None)
+if SENTRY_DSN:
+    logger.info('Sentry DSN Enabled')
+    import sentry_sdk
+    sentry_sdk.init(SENTRY_DSN)
+
 def handle_signal(sig, frame):
   if sig == 2:
     global STOP_DAEMON

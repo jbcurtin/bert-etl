@@ -3,6 +3,7 @@ import hashlib
 import importlib
 import marshmallow
 import marshmallow.fields
+import os
 import logging
 import types
 
@@ -15,6 +16,12 @@ from werkzeug.serving import run_simple
 from werkzeug.wsgi import DispatcherMiddleware
 
 logger = logging.getLogger()
+
+SENTRY_DSN: str = os.environ.get('SENTRY_DSN', None)
+if SENTRY_DSN:
+    logger.info('Sentry DSN Enabled')
+    import sentry_sdk
+    sentry_sdk.init(SENTRY_DSN)
 
 APP: flask.Flask = flask.Flask(f'{constants.SERVICE_NAME}-webservice')
 APP.secret_key = constants.WWW_SECRET
