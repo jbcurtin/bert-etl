@@ -115,11 +115,18 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
     bert_configuration = bert_deploy_shortcuts.load_local_configuration()
 
     for job_name, job in jobs.items():
+        runtime: int = bert_deploy_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
+        memory_size: int = bert_deploy_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
+        timeout: int = bert_deploy_shortcuts.get_if_exists('timeout', '900', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         env_vars: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
-            bert_configuration.get('every_lambda', {'environment': {}})['environment'],
-            bert_configuration.get(job_name, {'environment': {}})['environment'])
+            bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
+            bert_configuration.get(job_name, {'environment': {}}).get('environment', {}))
+
+        requirements: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
+            bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
+            bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
+
         env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
-        runtime: str = bert_configuration.get('runtime', 'python3.6')
         try:
             memory_size: str = int(bert_configuration.get('memory_size', '512'))
         except ValueError:
@@ -180,10 +187,11 @@ def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda context' = Non
         confs[_calc_lambda_name(job_name)] = {
                 'project-path': project_path,
                 'table-name': f'{job_name}-stream',
-                # 'runtime': 'python3.7',
+                'timeout': timeout,
                 'runtime': runtime,
                 'memory-size': memory_size, # must be a multiple of 64, increasing memory size also increases cpu allocation
                 'environment': env_vars,
+                'requirements': requirements,
                 'handler-name': f'{job_name}.{job_name}',
                 'spaces': {
                     'work-key': job.work_key,
@@ -483,7 +491,7 @@ def upload_lambdas(lambdas: typing.Dict[str, typing.Any]) -> None:
                 Code={
                     'ZipFile': open(conf['archive-path'], 'rb').read(),
                 },
-                Timeout=900,
+                Timeout=conf['timeout'],
                 Environment={'Variables': conf['environment']},
             )
             conf['aws-lambda'] = client.get_function(FunctionName=lambda_name)['Configuration']
