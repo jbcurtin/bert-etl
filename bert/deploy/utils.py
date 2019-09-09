@@ -508,7 +508,7 @@ def upload_lambdas(lambdas: typing.Dict[str, typing.Any]) -> None:
                 Code={
                     'ZipFile': open(conf['archive-path'], 'rb').read(),
                 },
-                Timeout=900,
+                Timeout=conf['timeout'],
                 Environment={'Variables': conf['environment']},
             )
             conf['aws-lambda'] = client.get_function(FunctionName=lambda_name)['Configuration']
