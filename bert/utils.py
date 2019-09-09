@@ -71,8 +71,7 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
         return 'S'
 
     else:
-        import ipdb; ipdb.set_trace()
-        raise NotImplementedError
+        raise NotImplementedError(f'Encoding[{datum}] Type not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
 
 def _encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     if isinstance(datum, dict):
@@ -199,6 +198,32 @@ class StreamingQueue(DynamodbQueue):
             client = boto3.client('dynamodb')
             client.delete_item(TableName=self._key, Key={'identity': value['identity']})
             return unpacked
+
+class LocalQueue(DynamodbQueue):
+    """
+    When testing, its convenient to use only a LocalQueue
+    """
+    _key: str = None
+    # Share the memory across invocations, within the same process/thread. This allows for
+    #   comm_binders to be called multipule-times and still pull from the same queue
+    _queue: typing.List[typing.Dict[str, typing.Any]] = []
+    def __init__(self: PWN, key: str) -> None:
+        self._key = key
+
+    def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
+        self._queue.append(copy.deepcopy(record))
+
+    def put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
+        raise NotImplementedError
+
+    def get(self: PWN) -> typing.Dict[str, typing.Any]:
+        try:
+            value: typing.Any = self._queue.pop(0)
+        except IndexError:
+            return None
+
+        else:
+            return value
 
 class Queue:
   DEFAULT_DELAY: int = 1728000
@@ -383,8 +408,8 @@ def comm_binders(func: types.FunctionType) -> typing.Tuple[Queue, Queue, 'ologge
     elif constants.QueueType is constants.QueueTypes.StreamingQueue:
         return StreamingQueue(func.work_key), StreamingQueue(func.done_key), ologger
 
-    # elif constants.QueueType is constants.QueueTypes.DynamodbStreamBottle:
-    #     return DynamodbStreamQueue(func.work_key), DynamodbStreamBottleQueue(func.done_key), ologger
+    elif constants.QueueType is constants.QueueTypes.LocalQueue:
+        return LocalQueue(func.work_key), LocalQueue(func.done_key), ologger
 
     elif constants.QueueType is constants.QueueTypes.Redis:
         return Queue(func.work_key), Queue(func.done_key), ologger

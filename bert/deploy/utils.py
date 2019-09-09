@@ -136,9 +136,10 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
         job_template: str = """
 %s
 import typing
+
 from bert import utils, constants, binding, shortcuts
 %s
-def %s(event, context=None):
+def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda context' = None) -> None:
 
     records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
     if len(records) > 0:
@@ -148,12 +149,25 @@ def %s(event, context=None):
             if record['eventName'].lower() == 'INSERT'.lower():
                 work_queue.local_put(record['dynamodb']['NewImage'])
 
+    elif len(event.keys()) > 0 and constants.DEBUG:
+        constants.QueueType = constants.QueueTypes.LocalQueue
+        work_queue, done_queue, ologger = utils.comm_binders(%s)
+        work_queue.local_put(event)
+
+    elif len(event.keys()) > 0 and constants.DEBUG is False:
+        constants.QueueType = constants.QueueTypes.StreamingQueue
+        work_queue, done_queue, ologger = utils.comm_binders(%s)
+        work_queue.local_put(event)
+
+
     else:
         work_queue, done_queue, ologger = utils.comm_binders(%s)
 
+    ologger.info(f'QueueType[{constants.QueueType}]')
+
 %s
     return {}
-""" % (job_templates, job_follow, job_name, job_name, job_name, job_source)
+""" % (job_templates, job_follow, job_name, job_name, job_name, job_name, job_name, job_source)
         job_path: str = os.path.join(project_path, f'{job_name}.py')
 
         with open(job_path, 'w') as stream:

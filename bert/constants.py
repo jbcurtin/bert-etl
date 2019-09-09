@@ -53,7 +53,7 @@ QueueType: str = os.environ.get('BERT_QUEUE_TYPE', 'redis')
 if QueueType.lower() in ['dynamodb']:
     QueueType = QueueTypes.Dynamodb
 
-elif QueueType.lower() in ['testing-queue']:
+elif QueueType.lower() in ['local-queue']:
     QueueType = QueueType.LocalQueue
 
 elif QueueType.lower() in ['streaming-queue']:

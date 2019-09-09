@@ -46,10 +46,9 @@ def deploy_service(options) -> None:
         if options.invoke:
             import boto3
             client = boto3.client('lambda')
-            conf = lambdas[[item for item in lambdas.keys()][0]]
             client.invoke(
-                    FunctionName=conf['aws-lambda']['FunctionName'],
-                    InvocationType='Event')
+                FunctionName=[job for job in jobs.keys()][0],
+                InvocationType='Event')
             import sys; sys.exit(0)
 
         lambdas: typing.Dict[str, typing.Any] = bert_deploy_utils.build_lambda_archives(jobs)
