@@ -4,6 +4,8 @@ import os
 import typing
 import yaml
 
+from bert.deploy import exceptions
+
 logger = logging.getLogger(__name__)
 
 def get_if_exists(key: str, default: typing.Any, data_type: typing.Any, defaults: typing.Dict[str, str], env_vars: typing.Dict[str, str]) -> typing.Dict[str, str]:
@@ -14,12 +16,12 @@ def get_if_exists(key: str, default: typing.Any, data_type: typing.Any, defaults
         pass
 
     except ValueError:
-        raise NotImplementedError(f'Key[{key}] is not DataType[{data_type}]')
+        raise exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
 
     try:
         return data_type(defaults.get(key, default))
     except ValueError:
-        raise NotImplementedError(f'Key[{key}] is not DataType[{data_type}]')
+        raise exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
 
 def merge_env_vars(defaults: typing.Dict[str, str], env_vars: typing.Dict[str, str]) -> typing.Dict[str, str]:
     merged: typing.Dict[str, str] = {key: value for key, value in defaults.items()}

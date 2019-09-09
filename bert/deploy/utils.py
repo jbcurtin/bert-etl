@@ -12,7 +12,7 @@ import types
 import typing
 import zipfile
 
-from bert.deploy import shortcuts as bert_deploy_shortcuts
+from bert.deploy import shortcuts as bert_deploy_shortcuts, exceptions as deploy_exceptions
 
 from botocore.errorfactory import ClientError
 
@@ -117,6 +117,9 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
     for job_name, job in jobs.items():
         runtime: int = bert_deploy_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         memory_size: int = bert_deploy_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
+        if int(memory_size / 64) != memory_size / 64:
+            raise deploy_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
+
         timeout: int = bert_deploy_shortcuts.get_if_exists('timeout', '900', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         env_vars: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
             bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
@@ -127,11 +130,6 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
 
         env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
-        try:
-            memory_size: str = int(bert_configuration.get('memory_size', '512'))
-        except ValueError:
-            raise NotImplementedError('MemorySize must be an integer')
-
         project_path: str = tempfile.mkdtemp(prefix=f'bert-etl-project-{job_name}')
         logger.info(f'Creating Project Path[{project_path}]')
         job_templates: str = ''.join([f"""def {jn}():
