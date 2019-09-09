@@ -78,6 +78,4 @@ Getting Started
 .. toctree::
     :maxdepth: 1
 
-    index
-    aws_testing
 
