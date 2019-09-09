@@ -47,10 +47,14 @@ class QueueTypes(enum.Enum):
     # Used to invoke asynchronous lambdas
     StreamingQueue: str = 'streaming-queue'
     Redis: str = 'redis'
+    LocalQueue: str = 'local-queue'
 
 QueueType: str = os.environ.get('BERT_QUEUE_TYPE', 'redis')
 if QueueType.lower() in ['dynamodb']:
     QueueType = QueueTypes.Dynamodb
+
+elif QueueType.lower() in ['testing-queue']:
+    QueueType = QueueType.LocalQueue
 
 elif QueueType.lower() in ['streaming-queue']:
     QueueType = QueueTypes.StreamingQueue

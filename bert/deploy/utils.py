@@ -118,7 +118,7 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
         env_vars: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
             bert_configuration.get('every_lambda', {'environment': {}})['environment'],
             bert_configuration.get(job_name, {'environment': {}})['environment'])
-        env_vars['QUEUE_TYPE'] = env_vars.get('QUEUE_TYPE', 'dynamodb')
+        env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
         runtime: str = bert_configuration.get('runtime', 'python3.6')
         try:
             memory_size: str = int(bert_configuration.get('memory_size', '512'))
@@ -223,6 +223,18 @@ def build_package(job_name: str, job_conf: typing.Dict[str, typing.Any], exclude
 
     job_conf['archive-path'] = archive_path
 
+def include_bert_dev(bert_dev_path: str, venv_path: str, excludes: typing.List[str] = []) -> None:
+    excludes = ZIP_EXCLUDES + excludes + ['lamdbas']
+    temp_bert_path: str = tempfile.mkdtemp(prefix='bert-dev-path')
+    bert_dev: str = os.path.join(temp_bert_path, 'bert')
+    # Make sure the correct filepath was provided
+    for filename in ['__init__.py', 'factory.py', 'binding.py', 'constants.py', 'utils.py', 'shortcuts.py']:
+        assert filename in os.listdir(bert_dev_path), f'Incorrect BERT_DEV[{bert_dev_path}] provided, filename[{filename}] not found'
+
+    copytree(bert_dev_path, bert_dev, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
+    copytree(temp_bert_path, venv_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
+
+
 def build_lambda_archives(jobs: typing.Dict[str, types.FunctionType]) -> str:
     venv_path: str = get_current_venv()
     if venv_path is None:
@@ -231,6 +243,10 @@ def build_lambda_archives(jobs: typing.Dict[str, types.FunctionType]) -> str:
             venv_path = get_conda_venv()
             if venv_path is None:
                 raise NotImplementedError
+
+    if os.environ.get('BERT_DEV', None):
+        logger.warning('BERT_DEV ENVVar found, including development version of bert-etl')
+        include_bert_dev(os.environ['BERT_DEV'], venv_path)
 
     archive_paths: typing.List[str] = []
     lambdas: typing.Dict[str, typing.Any] = collections.OrderedDict()
