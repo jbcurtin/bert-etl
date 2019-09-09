@@ -12,6 +12,7 @@ import types
 import typing
 import zipfile
 
+from bert import utils as bert_utils
 from bert.deploy import shortcuts as bert_deploy_shortcuts, exceptions as deploy_exceptions
 
 from botocore.errorfactory import ClientError
@@ -125,7 +126,7 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
             bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
             bert_configuration.get(job_name, {'environment': {}}).get('environment', {}))
 
-        requirements: typing.Dict[str, str] = bert_deploy_shortcuts.merge_env_vars(
+        requirements: typing.Dict[str, str] = bert_deploy_shortcuts.merge_requirements(
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
 
@@ -182,6 +183,8 @@ def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda context' = Non
         copytree(os.getcwd(), project_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
         logger.info(f'Merging Job[{job_name}] Site Packages')
         copytree(venv_path, project_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
+        logger.info(f'Merging Job[{job_name}] Requirements')
+        bert_utils.run_command(f'pip install -t {project_path} {" ".join(requirements)} -U')
         confs[_calc_lambda_name(job_name)] = {
                 'project-path': project_path,
                 'table-name': f'{job_name}-stream',
@@ -197,7 +200,7 @@ def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda context' = Non
                     'pipeline-type': job.pipeline_type,
                     'workers': job.workers,
                     'scheme': job.schema,
-                }
+                },
             }
 
     return confs
@@ -278,6 +281,7 @@ def build_lambda_archives(jobs: typing.Dict[str, types.FunctionType]) -> str:
 
     return lambdas
 
+# def replace_lambda_archives_with_requires(build_lambda_archives
 def destroy_dynamodb_tables(jobs: typing.Dict[str, typing.Any]) -> None:
     table: typing.Any = None
     client = boto3.client('dynamodb')

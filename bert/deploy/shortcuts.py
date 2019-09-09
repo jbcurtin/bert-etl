@@ -23,6 +23,16 @@ def get_if_exists(key: str, default: typing.Any, data_type: typing.Any, defaults
     except ValueError:
         raise exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
 
+def merge_requirements(defaults: typing.List[str], requirements: typing.List[str]) -> typing.List[str]:
+    merged: typing.List[str] = {value for value in defaults}
+    for value in requirements:
+        if value in merged:
+            continue
+
+        merged.append(value)
+
+    return [item for item in merged]
+
 def merge_env_vars(defaults: typing.Dict[str, str], env_vars: typing.Dict[str, str]) -> typing.Dict[str, str]:
     merged: typing.Dict[str, str] = {key: value for key, value in defaults.items()}
     for key, value in env_vars.items():
