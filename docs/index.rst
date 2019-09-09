@@ -69,13 +69,4 @@ With the above script and using redis, we can download files concurrently in sep
 
 Be careful though, wikipedia will ratelimit you. It works better with S3 or other CDNs
 
-.. _getting-started:
-
-###############
-Getting Started
-###############
-
-.. toctree::
-    :maxdepth: 1
-
 
