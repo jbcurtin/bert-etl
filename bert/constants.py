@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 NOOP: str = 'noop'
 DNS: str = '8.8.8.8'
 ENCODING: str = 'utf-8'
-DEBUG: bool = False if os.environ.get('DEBUG', 'true') in ['f', 'false', 'no'] else True
+DEBUG: bool = False if os.environ.get('DEBUG', 'true').lower() in ['f', 'false', 'no'] else True
 DELAY: int = .1
 DATETIME_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
 WWW_SECRET: str = os.environ.get('WWW_SECRET', 'noop')

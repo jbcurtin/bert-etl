@@ -70,8 +70,14 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     elif isinstance(datum, str):
         return 'S'
 
+    elif isinstance(datum, int):
+        return 'S'
+
+    elif isinstance(datum, float):
+        return 'S'
+
     else:
-        raise NotImplementedError(f'Encoding[{datum}] Type not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
+        raise NotImplementedError(f'Encoding[{datum}] Type[{datum.__class__}] not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
 
 def _encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     if isinstance(datum, dict):
@@ -85,6 +91,12 @@ def _encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
             datum[idx] = {_find_aws_encoding(value): _encode_aws_object(value)}
 
         return datum
+
+    elif isinstance(datum, int):
+        return f'int:{datum}'
+
+    elif isinstance(datum, float):
+        return f'float:{datum}'
 
     else:
         return datum
@@ -106,12 +118,17 @@ def _decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
         elif encoding_type == 'B':
             return encoded
 
+        elif encoding_type == 'S' and encoded[:4] == 'int:':
+            return int(encoded.split(':', 1)[1])
+
+        elif encoding_type == 'S' and encoded[:6] == 'float:':
+            return float(encoded.split(':', 1)[1])
+
         elif encoding_type == 'S':
             return encoded
 
         else:
-            import ipdb; ipdb.set_trace()
-            raise NotImplementedError
+            raise NotImplementedError(f'Decoding[{encoded}] EncodingType[{encoding_type}], Type[{encoded.__class__}] not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
 
 class DynamodbQueue:
     DEFAULT_DELAY: int = 1728000
