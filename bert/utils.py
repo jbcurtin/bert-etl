@@ -231,7 +231,7 @@ class LocalQueue(DynamodbQueue):
         self._queue.append(copy.deepcopy(record))
 
     def put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
-        self._queue.append(copy.deepcopy(record))
+        logger.info(f'LocalQueue Put[{record}]')
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
         try:
