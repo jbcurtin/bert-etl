@@ -123,11 +123,8 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
 
     return base_encoders.encode_aws_object(datum)
 
-import logging
-logger = logging.getLogger(__name__)
 def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
     for encoding_type, encoded in datum.items():
-        logger.info(f'Type[{encoding_type}] Encoded[{encoded}]')
         if encoding_type == 'M':
             for key, value, in encoded.items():
                 encoded[key] = decode_aws_object(value)

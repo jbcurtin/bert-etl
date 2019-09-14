@@ -121,24 +121,16 @@ class StreamingQueue(DynamodbQueue):
         self._key = key
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
-        print('Putting Record')
-        # print(json.dumps(record))
         self._queue.append(copy.deepcopy(record))
-        print('queue len', id(self), len(self._queue))
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
-        print('Getting Record')
-        print('queue len', id(self), len(self._queue))
         try:
             value: typing.Any = self._queue.pop(0)
         except IndexError:
             return None
 
         else:
-            print('value')
-            print(value)
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(value['datum'])
-            print(unpacked)
             client = boto3.client('dynamodb')
             client.delete_item(TableName=self._key, Key={'identity': value['identity']})
             return unpacked
