@@ -40,6 +40,7 @@ definition. In the following example, 'numpy.encode_aws_object' will run before 
 
 
 .. code-block:: yaml
+
     every_lambda:
       queue_encoders:
         - 'bert.encoders.base.encode_aws_object'
@@ -56,6 +57,7 @@ helpful because AWS Lambda charges happen in increments of 100ms. Importing `ast
 
 
 .. code-block:: yaml
+
     every_lambda:
       queue_encoders:
         - 'bert.encoders.base.encode_aws_object'
@@ -66,4 +68,6 @@ helpful because AWS Lambda charges happen in increments of 100ms. Importing `ast
 
       queue_encoders:
         - 'bert.encoders.numpy.encode_aws_object'
+
+
 
