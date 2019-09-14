@@ -7,7 +7,7 @@ out of the codes you write. When deploying bert-etl to the cloud, data will be s
 the lambda definition provided by the deploy script.
 
 `bert-etl` trys to ship with the latest datatypes available in `astropy` and `numpy`. Please open a pull request
-with a new encoder/decoder or `let us know` if support is lacking somewhere
+with a new encoder/decoder or `let us know`_ if support is lacking somewhere
 
 
 .. _`bert-etl.yaml`: https://bert-etl.readthedocs.io/en/latest/bert-etl-yaml.html
@@ -51,8 +51,8 @@ definition. In the following example, 'numpy.encode_aws_object' will run before 
 
 
 
-The approach allows for a lot of control to seperate out requirements specific to a lambda function. Reducing the
-overall zipfile size uploaded to AWS S3 or AWS Lambda. It also opens more control for managing code execution, which is
+The approach allows for a lot of control for seperating out requirements specific to a lambda function. Reducing the
+overall zipfile size uploaded. Also provides more control for managing code execution, which is
 helpful because AWS Lambda charges happen in increments of 100ms. Importing `astropy` or `numpy` may cost more
 
 
