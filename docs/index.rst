@@ -77,6 +77,6 @@ See Also
     :maxdepth: 1
 
     index
-    AWS Testing aws_testing
-    Encoding and Decoding Objects queue_encoders__and__queue_decoders
+    Testing aws_testing
+    queue_encoders__and__queue_decoders
 
