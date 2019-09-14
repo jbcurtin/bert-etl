@@ -12,9 +12,8 @@ import types
 import typing
 import zipfile
 
-from bert import utils as bert_utils
+from bert import utils as bert_utils, encoders as bert_encoders
 from bert.deploy import shortcuts as bert_deploy_shortcuts, exceptions as deploy_exceptions
-
 from botocore.errorfactory import ClientError
 
 # Related: https://github.com/Miserlou/Zappa/pull/56
@@ -116,6 +115,30 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
     bert_configuration = bert_deploy_shortcuts.load_local_configuration()
 
     for job_name, job in jobs.items():
+        identity_encoders: typing.List[str] = bert_deploy_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'identity_encoders': []}).get('identity_encoders', []),
+            bert_configuration.get(job_name, {'identity_encoders': []}).get('identity_encoders', []),
+            ['bert.encoders.base.IdentityEncoder'])
+
+        queue_encoders: typing.List[str] = bert_deploy_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'queue_encoders': []}).get('queue_encoders', []),
+            bert_configuration.get(job_name,        {'queue_encoders': []}).get('queue_encoders', []),
+            ['bert.encoders.base.encode_aws_object'])
+
+        queue_decoders: typing.List[str] = bert_deploy_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'queue_decoders': []}).get('queue_decoders', []),
+            bert_configuration.get(job_name,        {'queue_decoders': []}).get('queue_decoders', []),
+            ['bert.encoders.base.decode_aws_object'])
+
+        bert_encoders.load_encoders_or_decoders(identity_encoders)
+        bert_encoders.load_encoders_or_decoders(queue_encoders)
+        bert_encoders.load_encoders_or_decoders(queue_decoders)
+
+        # Align the lists with expectations of top -> bottom execution in bert-etl.yaml
+        # identity_encoders.reverse()
+        # queue_encoders.reverse()
+        # queue_decoders.reverse()
+
         runtime: int = bert_deploy_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         memory_size: int = bert_deploy_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         if int(memory_size / 64) != memory_size / 64:
@@ -143,12 +166,16 @@ def build_project_envs(jobs: typing.Dict[str, types.FunctionType], venv_path: st
 %s
 import typing
 
-from bert import utils, constants, binding, shortcuts
+from bert import utils, constants, binding, shortcuts, encoders
+encoders.load_identity_encoders(%s)
+encoders.load_queue_encoders(%s)
+encoders.load_queue_decoders(%s)
+
 %s
 def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
 
     records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
-    if len(records) > 0:
+    if len(records) > 0 and constants.DEBUG == False:
         constants.QueueType = constants.QueueTypes.StreamingQueue
         work_queue, done_queue, ologger = utils.comm_binders(%s)
         for record in records:
@@ -167,7 +194,7 @@ def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = Non
 
 %s
     return {}
-""" % (job_templates, job_follow, job_name, job_name, job_name, job_name, job_source)
+""" % (job_templates, identity_encoders, queue_encoders, queue_decoders, job_follow, job_name, job_name, job_name, job_name, job_source)
         job_path: str = os.path.join(project_path, f'{job_name}.py')
 
         with open(job_path, 'w') as stream:
@@ -195,6 +222,11 @@ def %s(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = Non
                     'workers': job.workers,
                     'scheme': job.schema,
                 },
+                'encoding': {
+                    'identity_encoders': identity_encoders,
+                    'queue_encoders': queue_encoders,
+                    'queue_decoders': queue_decoders,
+                }
             }
 
     return confs

@@ -1,5 +1,9 @@
 class BertException(Exception):
-  pass
+    pass
 
 class SchemaRequired(BertException):
-  pass
+    pass
+
+class EncoderLoadError(BertException):
+    pass
+

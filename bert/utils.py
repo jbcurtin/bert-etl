@@ -20,7 +20,7 @@ import requests
 
 from datetime import datetime
 
-from bert import constants, datasource
+from bert import constants, datasource, encoders as bert_encoders
 
 from urllib.parse import urlparse, ParseResult
 
@@ -57,79 +57,6 @@ class Across:
 
     return False
 
-def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
-    if isinstance(datum, dict):
-        return 'M'
-
-    elif isinstance(datum, list):
-        return 'L'
-
-    elif isinstance(datum, bytes):
-        return 'B'
-
-    elif isinstance(datum, str):
-        return 'S'
-
-    elif isinstance(datum, int):
-        return 'S'
-
-    elif isinstance(datum, float):
-        return 'S'
-
-    else:
-        raise NotImplementedError(f'Encoding[{datum}] Type[{datum.__class__}] not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
-
-def _encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
-    if isinstance(datum, dict):
-        for key, value in datum.items():
-            datum[key] = {_find_aws_encoding(value): _encode_aws_object(value)}
-
-        return datum
-
-    elif isinstance(datum, (list, tuple, types.GeneratorType)):
-        for idx, value in enumerate(datum):
-            datum[idx] = {_find_aws_encoding(value): _encode_aws_object(value)}
-
-        return datum
-
-    elif isinstance(datum, int):
-        return f'int:{datum}'
-
-    elif isinstance(datum, float):
-        return f'float:{datum}'
-
-    else:
-        return datum
-
-def _decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
-    for encoding_type, encoded in datum.items():
-        if encoding_type == 'M':
-            for key, value, in encoded.items():
-                encoded[key] = _decode_aws_object(value)
-
-            return encoded
-
-        elif encoding_type == 'L':
-            for idx, value in enumerate(encoded):
-                encoded[idx] = _decode_aws_object(value)
-
-            return encoded
-
-        elif encoding_type == 'B':
-            return encoded
-
-        elif encoding_type == 'S' and encoded[:4] == 'int:':
-            return int(encoded.split(':', 1)[1])
-
-        elif encoding_type == 'S' and encoded[:6] == 'float:':
-            return float(encoded.split(':', 1)[1])
-
-        elif encoding_type == 'S':
-            return encoded
-
-        else:
-            raise NotImplementedError(f'Decoding[{encoded}] EncodingType[{encoding_type}], Type[{encoded.__class__}] not supported yet. Please open a pull requset with this error message. https://github.com/jbcurtin/bert-etl')
-
 class DynamodbQueue:
     DEFAULT_DELAY: int = 1728000
     @staticmethod
@@ -137,7 +64,7 @@ class DynamodbQueue:
         """
         Dict -> AWS Dict -> json.dumps
         """
-        _encode_aws_object(datum)
+        datum = bert_encoders.encode_object(datum)
         return datum
 
     @staticmethod
@@ -145,7 +72,7 @@ class DynamodbQueue:
         """
         AWS Dynamodb Dict -> Dict
         """
-        return _decode_aws_object(datum)
+        return bert_encoders.decode_object(datum)
 
     _key: str = None
     def __init__(self: PWN, key: str) -> None:
@@ -162,7 +89,7 @@ class DynamodbQueue:
         return value
 
     def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
-        combined: str = ''.join(sorted(json.dumps(value)))
+        combined: str = ''.join(sorted(bert_encoders.encode_identity_object(value)))
         identity: str = hashlib.sha256(combined.encode('utf-8')).hexdigest()
         value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
         client: typing.Any = boto3.client('dynamodb')
@@ -195,7 +122,7 @@ class StreamingQueue(DynamodbQueue):
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         print('Putting Record')
-        print(json.dumps(record))
+        # print(json.dumps(record))
         self._queue.append(copy.deepcopy(record))
         print('queue len', id(self), len(self._queue))
 

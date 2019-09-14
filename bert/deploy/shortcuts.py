@@ -40,6 +40,26 @@ def merge_env_vars(defaults: typing.Dict[str, str], env_vars: typing.Dict[str, s
 
     return merged
 
+def merge_lists(main: typing.List[typing.Any], secondary: typing.List[typing.Any], defaults: typing.List[typing.Any]) -> typing.List[typing.Any]:
+    if len(main) == 0 and len(secondary) == 0:
+        return defaults
+
+    # Preserve order or list
+    merged = []
+    for value in secondary:
+        if value in merged:
+            continue
+
+        merged.append(value)
+
+    for value in main:
+        if value in merged:
+            continue
+
+        merged.append(value)
+
+    return merged
+
 def load_local_configuration() -> typing.Dict[str, typing.Any]:
     conf_path: str = os.path.join(os.getcwd(), 'bert-etl.yaml')
     if not os.path.exists(conf_path):
