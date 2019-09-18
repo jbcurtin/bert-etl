@@ -22,6 +22,7 @@ def load_encoders_or_decoders(encoders_or_decoders: typing.List[str]) -> None:
     for encoder_or_decoder in encoders_or_decoders:
         if encoder_or_decoder in _ENCODER_OR_DECODER_CACHE.keys():
             objects.append(_ENCODER_OR_DECODER_CACHE[encoder_or_decoder])
+            continue
 
         try:
             module_path, encoder_or_decoder_name = encoder_or_decoder.rsplit('.', 1)
@@ -55,6 +56,14 @@ def load_queue_decoders(queue_decoders: typing.List[str]) -> None:
     global QUEUE_DECODERS
     QUEUE_DECODERS = load_encoders_or_decoders(queue_decoders)
 
+def clear_encoding() -> None:
+    global QUEUE_ENCODERS
+    global QUEUE_DECODERS
+    global IDENTITY_ENCODERS
+    QUEUE_ENCODERS = []
+    QUEUE_DECODERS = []
+    IDENTITY_ENCODERS = []
+
 def encode_identity_object(obj: typing.Any) -> typing.Any:
     for identity_encoder in IDENTITY_ENCODERS:
         try:
@@ -66,25 +75,28 @@ def encode_identity_object(obj: typing.Any) -> typing.Any:
 
 def encode_object(obj: typing.Any) -> typing.Any:
     for encoder in QUEUE_ENCODERS:
-        logger.info(f'Encoder[{encoder.__module__}:{encoder.__name__}]')
+        logger.debug(f'Encoder[{encoder.__module__}:{encoder.__name__}]')
 
     for encoder in QUEUE_ENCODERS:
         result = encoder(obj)
-        logger.info(f'Encoder[{encoder.__module__}:{encoder.__name__}] Result[{result}]')
+        logger.debug(f'Encoder[{encoder.__module__}:{encoder.__name__}] Result[{result}]')
+
         if result:
             return result
 
-    raise bert_exceptions.BertEncoderError(f'Unable to encode object[{obj}], datatype[{type(obj)}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
+    raise bert_exceptions.BertEncoderError(f'Unable to encode object[{obj}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
 
 def decode_object(obj: typing.Any) -> typing.Any:
     for decoder in QUEUE_DECODERS:
-        logger.info(f'Decoder[{decoder.__module__}:{decoder.__name__}]')
+        logger.debug(f'Decoder[{decoder.__module__}:{decoder.__name__}]')
 
     for decoder in QUEUE_DECODERS:
         result = decoder(obj)
-        logger.info(f'Decoder[{decoder.__module__}:{decoder.__name__}] Result[{result}]')
+        logger.debug(f'Decoder[{decoder.__module__}:{decoder.__name__}] Result[{result}]')
+
         if result:
             return result
 
-    raise bert_exceptions.BertDecodingError(f'Unable to decode object[{obj}], datatype[{type(obj)}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
+    import ipdb; ipdb.set_trace()
+    raise bert_exceptions.BertDecoderError(f'Unable to decode object[{obj}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
 

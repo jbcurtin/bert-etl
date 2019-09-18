@@ -7,6 +7,31 @@ import typing
 from urllib.parse import ParseResult, urlparse
 
 PWN = typing.TypeVar('PWN')
+class ENVVars:
+    __slots__ = ('_env_vars', '_old_values')
+    _env_vars: typing.Dict[str, str]
+    _old_values: typing.Dict[str, str]
+
+    def __init__(self: PWN, env_vars: typing.Dict[str, str]) -> None:
+        self._env_vars = env_vars
+        self._old_values = {}
+
+    def __enter__(self: PWN) -> PWN:
+        for key, value in self._env_vars.items():
+            self._old_values[key] = os.environ.get(key, None)
+            os.environ[key] = value
+
+        return self
+
+    def __exit__(self: PWN, type, value, traceback) -> None:
+        for key, old_value in self._old_values.items():
+            if old_value is None:
+                del os.environ[key]
+
+            else:
+                os.environ[key] = old_value
+
+        self._old_values = {}
 
 class Postgres(collections.namedtuple('Postgres', ['host', 'port', 'dbname', 'username', 'password'])):
   __slots__ = ()

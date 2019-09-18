@@ -1,6 +1,6 @@
-##############################
-bert-etl Encoding and Decoding
-##############################
+#####################
+Encoding and Decoding
+#####################
 
 Encoders and Decoders allow `bert-etl` to communicate better between function definitions and keeping type definitions
 out of the codes you write. When deploying bert-etl to the cloud, data will be serialized in a compatable mannor with

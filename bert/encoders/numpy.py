@@ -124,6 +124,11 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     return base_encoders.encode_aws_object(datum)
 
 def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
+    try:
+        datum.items()
+    except Exception as err:
+        import ipdb; ipdb.set_trace()
+        pass
     for encoding_type, encoded in datum.items():
         if encoding_type == 'M':
             for key, value, in encoded.items():
