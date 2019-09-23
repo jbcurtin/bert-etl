@@ -71,7 +71,11 @@ def encode_identity_object(obj: typing.Any) -> typing.Any:
         except TypeError:
             continue
 
-    raise bert_exceptions.BertIdentityEncoderError(f'Unable to encode identity with object[{obj}], datatype[{type(obj)}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
+    raise bert_exceptions.BertIdentityEncoderError(f'''
+Unable to encoding identity with object[{obj}].
+Datatype[{type(obj)}].
+Loaded IdentityEncoders[{IDENTITY_ENCODERS}].
+https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html''')
 
 def encode_object(obj: typing.Any) -> typing.Any:
     for encoder in QUEUE_ENCODERS:
@@ -84,7 +88,11 @@ def encode_object(obj: typing.Any) -> typing.Any:
         if result:
             return result
 
-    raise bert_exceptions.BertEncoderError(f'Unable to encode object[{obj}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
+    raise bert_exceptions.BertEncoderError(f'''
+Unable to encode object[{obj}].
+Datatype[{obj}].
+Loaded Encoders[{QUEUE_ENCODERS}].
+https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html''')
 
 def decode_object(obj: typing.Any) -> typing.Any:
     for decoder in QUEUE_DECODERS:
@@ -97,6 +105,9 @@ def decode_object(obj: typing.Any) -> typing.Any:
         if result:
             return result
 
-    import ipdb; ipdb.set_trace()
-    raise bert_exceptions.BertDecoderError(f'Unable to decode object[{obj}]. https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html')
+    raise bert_exceptions.BertDecoderError(f'''
+Unable to decode object[{obj}].
+Datatype[{obj}].
+Loaded Decoders[{QUEUE_DECODERS}].
+https://bert-etl.readthedocs.io/en/latest/encoders_and_decoders.html''')
 

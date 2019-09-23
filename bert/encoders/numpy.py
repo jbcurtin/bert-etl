@@ -9,7 +9,7 @@ from bert.encoders import base as base_encoders
 
 PWN = typing.TypeVar('PWN')
 
-class NumpyIdentityEncoder(json.JSONEncoder):
+class NumpyIdentityEncoder(base_encoders.IdentityEncoder):
     def default(self: PWN, obj: typing.Any) -> typing.Any:
         if isinstance(obj, (
             np.float32, np.float64, np.float16,

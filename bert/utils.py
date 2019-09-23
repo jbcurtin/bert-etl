@@ -15,6 +15,8 @@ from bert import \
     encoders as bert_encoders, \
     exceptions as bert_exceptions
 
+from bert import naming as bert_naming
+
 ZIP_EXCLUDES: typing.List[str] = [
     '*.exe', '*.DS_Store', '*.Python', '*.git', '.git/*', '*.zip', '*.tar.gz',
     '*.hg', 'pip', 'docutils*', 'setuputils*', '__pycache__/*',
@@ -58,12 +60,6 @@ def scan_jobs(options) -> typing.Dict[str, typing.Any]:
                     ordered[job_name] = job
                     break
     return ordered
-
-def _calc_lambda_name(lambda_name: str) -> str:
-    return lambda_name
-
-def _calc_table_name(table_name: str) -> str:
-    return f'bert-etl-{table_name}'
 
 def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
     confs: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
@@ -119,10 +115,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'runtime': runtime,
                     'memory-size': memory_size, # must be a multiple of 64, increasing memory size also increases cpu allocation
                     'requirements': requirements,
-                    'handler': f'{_calc_lambda_name(job_name)}.{job_name}_handler',
-                    'lambda-name': f'{_calc_lambda_name(job_name)}',
-                    'work-table-name': f'{_calc_table_name(job.work_key)}',
-                    'done-table-name': f'{_calc_table_name(job.done_key)}',
+                    'handler': f'{bert_naming.calc_lambda_name(job_name)}.{job_name}_handler',
+                    'lambda-name': f'{bert_naming.calc_lambda_name(job_name)}',
+                    'work-table-name': f'{bert_naming.calc_table_name(job.work_key)}',
+                    'done-table-name': f'{bert_naming.calc_table_name(job.done_key)}',
                     'environment': env_vars,
                 },
                 'aws-build': {

@@ -8,7 +8,8 @@ import typing
 from bert import \
     encoders as bert_encoders, \
     datasource as bert_datasource, \
-    constants as bert_constants
+    constants as bert_constants, \
+    naming as bert_naming
 
 logger = logging.getLogger(__name__)
 PWN = typing.TypeVar('PWN')
@@ -31,7 +32,7 @@ class DynamodbQueue:
 
     _key: str = None
     def __init__(self: PWN, key: str) -> None:
-        self._key = key
+        self._key = bert_naming.calc_table_name(key)
 
     def __iter__(self) -> PWN:
         return self
@@ -73,7 +74,7 @@ class StreamingQueue(DynamodbQueue):
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
     def __init__(self: PWN, key: str) -> None:
-        self._key = key
+        self._key = bert_naming.calc_table_name(key)
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         self._queue.append(copy.deepcopy(record))
@@ -99,7 +100,7 @@ class LocalQueue(DynamodbQueue):
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
     def __init__(self: PWN, key: str) -> None:
-        self._key = key
+        self._key = bert_naming.calc_table_name(key)
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         self._queue.append(copy.deepcopy(record))
@@ -127,7 +128,7 @@ class RedisQueue:
         return bert_encoders.decode_object(datum)
 
     def __init__(self, redis_key: str):
-        self._key = redis_key
+        self._key = bert_naming.calc_table_name(redis_key)
         self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
 
     def __iter__(self):
