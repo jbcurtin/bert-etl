@@ -36,20 +36,37 @@ def capture_options() -> typing.Any:
 
 def deploy_service(options) -> None:
     jobs: typing.Dict[str, typing.Any] = bert_utils.scan_jobs(options)
+    jobs: typing.Dict[str, typing.Any] = bert_utils.map_jobs(jobs)
 
     if options.service == Service.AWSLambda:
+        if options.invoke:
+            import boto3
+            job_name: str = [job for job in jobs.keys()][0]
+            client = boto3.client('lambda')
+            logger.info(f'Invoking Job[{job_name}]')
+            client.invoke(
+                FunctionName=job_name,
+                InvocationType='Event')
+            import sys; sys.exit(0)
+
+        bert_deploy_utils.build_project(jobs)
+        bert_deploy_utils.build_lambda_handlers(jobs)
+        bert_deploy_utils.build_archives(jobs)
+        bert_deploy_utils.create_roles(jobs)
+        bert_deploy_utils.scan_dynamodb_tables(jobs)
+        bert_deploy_utils.destroy_lambda_to_table_bindings(jobs)
+        bert_deploy_utils.destroy_lambdas(jobs)
+        bert_deploy_utils.create_lambdas(jobs)
+        bert_deploy_utils.create_dynamodb_tables(jobs)
+        bert_deploy_utils.bind_lambdas_to_tables(jobs)
+
+        import ipdb; ipdb.set_trace()
+        import sys; sys.exit(1)
         if options.undeploy:
             bert_deploy_utils.destroy_dynamodb_tables(jobs)
             bert_deploy_utils.destroy_lambdas(jobs)
             import sys; sys.exit(0)
 
-        # if options.invoke:
-        #     import boto3
-        #     client = boto3.client('lambda')
-        #     client.invoke(
-        #         FunctionName=[job for job in jobs.keys()][0],
-        #         InvocationType='Event')
-        #     import sys; sys.exit(0)
 
         lambdas: typing.Dict[str, typing.Any] = bert_deploy_utils.build_lambda_archives(jobs)
         if options.dry_run:

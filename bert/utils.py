@@ -2,7 +2,9 @@ import collections
 import importlib
 import logging
 import multiprocessing
+import os
 import subprocess
+import time
 import types
 import typing
 
@@ -12,6 +14,12 @@ from bert import \
     shortcuts as bert_shortcuts, \
     encoders as bert_encoders, \
     exceptions as bert_exceptions
+
+ZIP_EXCLUDES: typing.List[str] = [
+    '*.exe', '*.DS_Store', '*.Python', '*.git', '.git/*', '*.zip', '*.tar.gz',
+    '*.hg', 'pip', 'docutils*', 'setuputils*', '__pycache__/*',
+]
+COMMON_EXCLUDES: typing.List[str] = ['env', 'lambdas']
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +62,16 @@ def scan_jobs(options) -> typing.Dict[str, typing.Any]:
 def _calc_lambda_name(lambda_name: str) -> str:
     return lambda_name
 
+def _calc_table_name(table_name: str) -> str:
+    return f'bert-etl-{table_name}'
+
 def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
     confs: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
     bert_configuration = bert_shortcuts.load_configuration()
+    deployment_config = bert_shortcuts.obtain_deployment_config(bert_configuration)
+
+    # Validate we have access to objects in AWS
+    bert_shortcuts.head_bucket_for_existance(deployment_config.s3_bucket)
 
     for job_name, job in jobs.items():
         identity_encoders: typing.List[str] = bert_shortcuts.merge_lists(
@@ -89,23 +104,36 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
             bert_configuration.get(job_name, {'environment': {}}).get('environment', {}))
 
+        # Set QueueType to dynamodb unless they've specifically requested a BERT_QUEUE_TYPE
+        env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
         requirements: typing.Dict[str, str] = bert_shortcuts.merge_requirements(
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
 
         confs[job_name] = {
                 'job': job,
+                'deployment': {key: value for key, value in deployment_config._asdict().items()},
+                'aws-deployed': {},
                 'aws-deploy': {
                     'timeout': timeout,
                     'runtime': runtime,
                     'memory-size': memory_size, # must be a multiple of 64, increasing memory size also increases cpu allocation
                     'requirements': requirements,
-                    'handler-name': f'{job_name}.{job_name}',
+                    'handler': f'{_calc_lambda_name(job_name)}.{job_name}_handler',
                     'lambda-name': f'{_calc_lambda_name(job_name)}',
+                    'work-table-name': f'{_calc_table_name(job.work_key)}',
+                    'done-table-name': f'{_calc_table_name(job.done_key)}',
                     'environment': env_vars,
+                },
+                'aws-build': {
+                    'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),
+                    'excludes': ZIP_EXCLUDES + COMMON_EXCLUDES,
+                    'path': os.path.join(os.getcwd(), 'lambdas', job_name),
+                    'archive-path': os.path.join(os.getcwd(), 'lambdas', f'{job_name}.zip')
                 },
                 'runner': {
                     'environment': env_vars,
+                    'max-retries': 10,
                 },
                 'spaces': {
                     'func_space': job.func_space,

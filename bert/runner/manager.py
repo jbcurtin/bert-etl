@@ -1,7 +1,10 @@
 #!/usr/env/bin python
 
+import functools
 import logging
+import multiprocessing
 import os
+import time
 import types
 import typing
 
@@ -15,6 +18,7 @@ from bert.runner import \
     constants as runner_constants
 
 logger = logging.getLogger(__name__)
+STOP_DAEMON: bool = False
 
 def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
@@ -39,7 +43,8 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
                 bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
                 bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
                 bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
-                while job_restart_count < MAX_RESTART_COUNT:
+                job_restart_count: int = 0
+                while job_restart_count < conf['runner']['max-retries']:
                     try:
 
                         with bert_datasource.ENVVars(conf['runner']['environment']):
@@ -67,22 +72,4 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             else:
                 while not STOP_DAEMON and any([proc.is_alive() for proc in processes]):
                     time.sleep(bert_constants.DELAY)
-
-  #         else:
-  #           break
-
-  #         job_restart_count += 1
-  #       else:
-  #         logger.exception(f'Job[{job}] failed {job_restart_count} times')
-
-  #     for idx in range(0, job.workers):
-  #       logging.info(f'Spawning Process[{idx}]')
-  #       proc: multiprocessing.Process = multiprocessing.Process(target=_job_runner, args=())
-  #       proc.daemon = True
-  #       proc.start()
-  #       processes.append(proc)
-
-  #     else:
-  #       while not STOP_DAEMON and any([proc.is_alive() for proc in processes]):
-  #         time.sleep(constants.DELAY)
 

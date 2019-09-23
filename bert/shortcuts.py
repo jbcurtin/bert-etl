@@ -1,9 +1,33 @@
+import boto3
+import collections
 import os
 import typing
 import yaml
 
 from bert import \
     exceptions as bert_exceptions
+
+from botocore.errorfactory import ClientError
+
+def head_bucket_for_existance(bucket_name: str) -> None:
+    client = boto3.client('s3')
+    try:
+        client.head_bucket(Bucket=bucket_name)
+    except ClientError as err:
+        if '(403)' in err.args[0]:
+            raise bert_exceptions.AWSError(f'Bucket[{bucket_name}] name is taken by someone else')
+
+def obtain_deployment_config(bert_configuration: typing.Any) -> collections.namedtuple:
+    """
+    Written verbosely to allow for default_keys
+    """
+    keys: typing.List[str] = [key for key in bert_configuration.get('deployment', {}).keys()]
+    values: typing.List[str] = []
+    deployment_tuple = collections.namedtuple('Deployment', keys)
+    for key in keys:
+        values.append(bert_configuration.get('deployment', {}).get(key, None))
+
+    return deployment_tuple(*values)
 
 def load_configuration() -> typing.Dict[str, typing.Any]:
     conf_path: str = os.path.join(os.getcwd(), 'bert-etl.yaml')

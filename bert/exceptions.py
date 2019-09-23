@@ -16,3 +16,6 @@ class BertDecoderError(BertException):
 class BertConfigError(BertException):
     pass
 
+class AWSError(BertException):
+    pass
+
