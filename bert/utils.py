@@ -63,7 +63,7 @@ def scan_jobs(options) -> typing.Dict[str, typing.Any]:
 
 def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
     confs: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
-    bert_configuration = bert_shortcuts.load_configuration()
+    bert_configuration = bert_shortcuts.load_configuration() or {}
     deployment_config = bert_shortcuts.obtain_deployment_config(bert_configuration)
 
     # Validate we have access to objects in AWS

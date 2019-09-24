@@ -12,7 +12,7 @@ import types
 import typing
 import zipfile
 
-from bert import utils as bert_utils, encoders as bert_encoders
+from bert import utils as bert_utils, encoders as bert_encoders, exceptions as bert_exceptions
 from bert.deploy import shortcuts as bert_deploy_shortcuts, exceptions as deploy_exceptions
 from botocore.errorfactory import ClientError
 
@@ -208,7 +208,7 @@ def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
         src_dir: str = None
         site_package_dir: str = None
         if not os.path.exists(conf['aws-build']['lambdas-path']):
-            os.makedirs(lambda_dir_path)
+            os.makedirs(conf['aws-build']['lambdas-path'])
 
         if os.path.exists(conf['aws-build']['path']):
             shutil.rmtree(conf['aws-build']['path'])
@@ -255,12 +255,13 @@ def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
         copytree(os.getcwd(), conf['aws-build']['path'], metadata=False, symlinks=False, ignore=conf['aws-build']['excludes'])
         logger.info(f'Copying SitePackages[{site_package_dir}] to Build Dir[{conf["aws-build"]["path"]}]')
         copytree(site_package_dir, conf['aws-build']['path'], metadata=False, symlinks=False, ignore=conf['aws-build']['excludes'])
-        if src_dir:
+        if src_dir and os.path.exists(src_dir):
             logger.info(f'Merging SrcDir[{src_dir}]')
             copytree(src_dir, conf['aws-build']['path'], metadata=False, symlinks=False, ignore=conf['aws-build']['excludes'])
 
-        logger.info(f'Mergeing Job[{job_name}] requirements')
-        bert_utils.run_command(f'pip install -t {conf["aws-build"]["path"]} {" ".join(conf["aws-deploy"]["requirements"])} -U')
+        if conf['aws-deploy']['requirements']:
+            logger.info(f'Mergeing Job[{job_name}] requirements')
+            bert_utils.run_command(f'pip install -t {conf["aws-build"]["path"]} {" ".join(conf["aws-deploy"]["requirements"])} -U')
 
 def build_archives(jobs: typing.Dict[str, typing.Any]) -> str:
     for job_name, conf in jobs.items():
@@ -460,6 +461,9 @@ def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
             logger.info(f'Deleted Lambda[{job_name}]')
 
 def create_lambda_s3_item(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
+    if conf['deployment']['s3_bucket'] is None:
+        raise bert_exceptions.BertConfigError('Archive over 50 MB. Please specify an s3_bucket to upload to. https://bert-etl.readthedocs.io/en/latest/bert-etl.yaml#s3_bucket')
+
     client = boto3.client('s3')
 
     try:

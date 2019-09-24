@@ -60,40 +60,6 @@ def deploy_service(options) -> None:
         bert_deploy_utils.create_dynamodb_tables(jobs)
         bert_deploy_utils.bind_lambdas_to_tables(jobs)
 
-        import ipdb; ipdb.set_trace()
-        import sys; sys.exit(1)
-        if options.undeploy:
-            bert_deploy_utils.destroy_dynamodb_tables(jobs)
-            bert_deploy_utils.destroy_lambdas(jobs)
-            import sys; sys.exit(0)
-
-
-        lambdas: typing.Dict[str, typing.Any] = bert_deploy_utils.build_lambda_archives(jobs)
-        if options.dry_run:
-            import sys; sys.exit(0)
-
-        if options.flush:
-            logger.info("Flushing Dynamodb Tables")
-            # bert_deploy_utils.destroy_dynamodb_tables(jobs)
-            bert_deploy_utils.build_dynamodb_tables(lambdas)
-            import sys; sys.exit(0)
-
-        bert_deploy_utils.build_dynamodb_tables(lambdas)
-        bert_deploy_utils.create_lambda_roles(lambdas)
-        bert_deploy_utils.destory_lambda_to_table_bindings(lambdas)
-        bert_deploy_utils.upload_lambdas(lambdas)
-        bert_deploy_utils.bind_lambdas_to_tables(lambdas)
-        if options.invoke:
-            import boto3
-            client = boto3.client('lambda')
-            client.invoke(
-                FunctionName=[job for job in jobs.keys()][0],
-                InvocationType='Event')
-            import sys; sys.exit(0)
-
-        import ipdb; ipdb.set_trace()
-        pass
-
     else:
         raise NotImplementedError(options.service)
 

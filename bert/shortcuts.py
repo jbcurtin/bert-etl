@@ -1,5 +1,6 @@
 import boto3
 import collections
+import logging
 import os
 import typing
 import yaml
@@ -9,7 +10,12 @@ from bert import \
 
 from botocore.errorfactory import ClientError
 
+logger = logging.getLogger(__name__)
+
 def head_bucket_for_existance(bucket_name: str) -> None:
+    if bucket_name is None:
+        return None
+
     client = boto3.client('s3')
     try:
         client.head_bucket(Bucket=bucket_name)
@@ -21,11 +27,19 @@ def obtain_deployment_config(bert_configuration: typing.Any) -> collections.name
     """
     Written verbosely to allow for default_keys
     """
-    keys: typing.List[str] = [key for key in bert_configuration.get('deployment', {}).keys()]
-    values: typing.List[str] = []
+    defaults = {
+        's3_bucket': None
+    }
+    items = bert_configuration.get('deployment', {})
+    for key, value in defaults.items():
+        if not key in items.keys():
+            items[key] = value
+
+    keys = [key for key in items.keys()]
+    values = []
     deployment_tuple = collections.namedtuple('Deployment', keys)
     for key in keys:
-        values.append(bert_configuration.get('deployment', {}).get(key, None))
+        values.append(items[key])
 
     return deployment_tuple(*values)
 

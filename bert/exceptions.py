@@ -21,4 +21,3 @@ class AWSError(BertException):
 
 class BertIdentityEncoderError(BertException):
     pass
-

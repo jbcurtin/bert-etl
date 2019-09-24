@@ -11,6 +11,8 @@ from bert import \
     constants as bert_constants, \
     naming as bert_naming
 
+# from botocore.errorfactory import ResourceNotFoundException
+
 logger = logging.getLogger(__name__)
 PWN = typing.TypeVar('PWN')
 
@@ -88,7 +90,13 @@ class StreamingQueue(DynamodbQueue):
         else:
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
             client = boto3.client('dynamodb')
+            # try:
             client.delete_item(TableName=self._key, Key={'identity': value['identity']})
+            # except ResourceNotFoundException:
+            #     # If the object doesn't exist in Dynamodb, it means another function has
+            #     #  taken the object.
+            #     return None
+
             return unpacked
 
 class LocalQueue(DynamodbQueue):
