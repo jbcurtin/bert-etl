@@ -5,7 +5,7 @@ AWS Lambda Testing
 With the AWS Lambda deployment target, you can test the functions through the AWS Lambda Console or locally with `bert-runner.py`. The environment var `DEBUG` is central to identifying the correct execution context of testing and non-testing. Only with `DEBUG` set to true, will you be able to test the lambda without invoking other lambdas. If `DEBUG` is set to false, you may pass an event into the function and the result pushed into `done_queue` will be streamed to the next lambda in the pipeline.
 
 
-For illustrative purposes, lets test a funciton. Go ahead and generate a new job-template.
+For illustrative purposes, let's test a function. Go ahead and generate a new job-template.
 
 .. code-block:: bash
 
