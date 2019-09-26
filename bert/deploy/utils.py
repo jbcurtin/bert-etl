@@ -260,7 +260,7 @@ def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
             copytree(src_dir, conf['aws-build']['path'], metadata=False, symlinks=False, ignore=conf['aws-build']['excludes'])
 
         if conf['aws-deploy']['requirements']:
-            logger.info(f'Mergeing Job[{job_name}] requirements')
+            logger.info(f'Merging Job[{job_name}] requirements')
             bert_utils.run_command(f'pip install -t {conf["aws-build"]["path"]} {" ".join(conf["aws-deploy"]["requirements"])} -U')
 
 def build_archives(jobs: typing.Dict[str, typing.Any]) -> str:
