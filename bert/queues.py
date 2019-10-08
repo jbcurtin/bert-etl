@@ -8,8 +8,7 @@ import typing
 from bert import \
     encoders as bert_encoders, \
     datasource as bert_datasource, \
-    constants as bert_constants, \
-    naming as bert_naming
+    constants as bert_constants
 
 # from botocore.errorfactory import ResourceNotFoundException
 
@@ -33,8 +32,11 @@ class DynamodbQueue:
         return bert_encoders.decode_object(datum)
 
     _key: str = None
-    def __init__(self: PWN, key: str) -> None:
-        self._key = bert_naming.calc_table_name(key)
+    _pipeline_type: bert_constants.PipelineType
+
+    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
+        self._key = key
+        self._pipeline_type = pipeline_type
 
     def __iter__(self) -> PWN:
         return self
@@ -51,14 +53,20 @@ class DynamodbQueue:
         identity: str = hashlib.sha256(combined.encode('utf-8')).hexdigest()
         value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
         client: typing.Any = boto3.client('dynamodb')
+        # logger.info(f'Putting Item in Table[{self._key}]')
         client.put_item(TableName=self._key, Item=value)
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
         client: typing.Any = boto3.client('dynamodb')
         try:
+            # logger.info(f'Scanning Table[{self._key}]')
             value: typing.Any = client.scan(TableName=self._key, Select='ALL_ATTRIBUTES', Limit=1)['Items'][0]
         except IndexError:
             return None
+
+        except Exception as err:
+            logger.info(f'Resource Name[{self._key}]')
+            raise err
 
         else:
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
@@ -75,8 +83,8 @@ class StreamingQueue(DynamodbQueue):
     # Share the memory across invocations, within the same process/thread. This allows for
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
-    def __init__(self: PWN, key: str) -> None:
-        self._key = bert_naming.calc_table_name(key)
+    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
+        self._key = key
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         self._queue.append(copy.deepcopy(record))
@@ -91,7 +99,9 @@ class StreamingQueue(DynamodbQueue):
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
             client = boto3.client('dynamodb')
             # try:
+            logger.info(f'removing Item[{value["identity"]}] from table[{self._key}]')
             client.delete_item(TableName=self._key, Key={'identity': value['identity']})
+            logger.info(f'removed Item[{value["identity"]}] from table[{self._key}]')
             # except ResourceNotFoundException:
             #     # If the object doesn't exist in Dynamodb, it means another function has
             #     #  taken the object.
@@ -107,8 +117,8 @@ class LocalQueue(DynamodbQueue):
     # Share the memory across invocations, within the same process/thread. This allows for
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
-    def __init__(self: PWN, key: str) -> None:
-        self._key = bert_naming.calc_table_name(key)
+    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
+        self._key = key
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         self._queue.append(copy.deepcopy(record))
@@ -135,8 +145,8 @@ class RedisQueue:
     def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
         return bert_encoders.decode_object(datum)
 
-    def __init__(self, redis_key: str):
-        self._key = bert_naming.calc_table_name(redis_key)
+    def __init__(self, key: str, pipeline_type: bert_constants.PipelineType):
+        self._key = key
         self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
 
     def __iter__(self):

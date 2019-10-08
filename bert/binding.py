@@ -8,13 +8,25 @@ import os
 import types
 import typing
 
-from bert import constants
+from bert import constants, naming
 
 DAISY_CHAIN = {}
 REGISTRY: typing.Dict[str, types.FunctionType] = {}
 ENCODING = 'utf-8'
-NOOP_SPACE: str = hashlib.sha1(constants.NOOP.encode(ENCODING)).hexdigest()
+NOOP_SPACE: str = naming.calc_func_space(constants.NOOP)
 logger = logging.getLogger(__name__)
+
+def _merge_parent_funcs(parent_func: types.FunctionType) -> typing.List[types.FunctionType]:
+    if isinstance(parent_func, str):
+        return []
+
+    elif isinstance(parent_func, types.FunctionType):
+        parents: typing.List[types.FunctionType] = getattr(parent_func, 'parent_funcs', [])[:]
+        parents.append(parent_func)
+        return parents
+
+    else:
+        raise NotImplementedError
 
 # Bert, a microframework for simple ETL solution that helps
 def follow(
@@ -23,37 +35,43 @@ def follow(
   workers: int = multiprocessing.cpu_count(),
   schema: marshmallow.Schema = None):
 
-  if isinstance(parent_func, str):
-    parent_func_space = hashlib.sha1(parent_func.encode(ENCODING)).hexdigest()
-    parent_func_work_key = hashlib.sha1(''.join([parent_func_space, 'work']).encode(ENCODING)).hexdigest()
-    parent_func_done_key = hashlib.sha1(''.join([parent_func_space, 'done']).encode(ENCODING)).hexdigest()
-    if parent_func_space != NOOP_SPACE:
-      raise NotImplementedError(f'Follow Parent[{parent_func}] is not valid. Must be types.FunctionType')
+  parent_func_space = naming.calc_func_space(parent_func)
+  parent_func_work_key = naming.calc_func_key(parent_func_space, 'work')
+  parent_func_done_key = naming.calc_func_key(parent_func_space, 'done')
+  if isinstance(parent_func, str) and parent_func_space == NOOP_SPACE:
+    pass
 
   elif isinstance(parent_func, types.FunctionType):
-    parent_func_space = hashlib.sha1(parent_func.__name__.encode(ENCODING)).hexdigest()
-    parent_func_work_key = hashlib.sha1(''.join([parent_func_space, 'work']).encode(ENCODING)).hexdigest()
-    parent_func_done_key = hashlib.sha1(''.join([parent_func_space, 'done']).encode(ENCODING)).hexdigest()
+    parent_func.work_key = parent_func_work_key
+    parent_func.done_key = parent_func_done_key
 
-    if getattr(parent_func, 'work_key', None) is None:
-      parent_func.work_key = parent_func_work_key
+  elif isinstance(parent_func, str):
+    raise NotImplementedError(f'Follow Parent[{parent_func}] is not valid. Must be types.FunctionType')
 
-    if getattr(parent_func, 'done_key', None) is None:
-      parent_func.done_key = parent_func_done_key
-
-    logger.debug(parent_func_space, 'parent-func', parent_func.__name__)
   else:
+    import ipdb; ipdb.set_trace()
     raise NotImplementedError
 
   @functools.wraps(parent_func)
   def _parent_wrapper(wrapped_func):
     # Let the parent know who follows
-    wrapped_func.parent_func: typing.Union[str, types.FunctionType]= parent_func
-
-    wrapped_func_space: str = hashlib.sha1(wrapped_func.__name__.encode(ENCODING)).hexdigest()
+    wrapped_func.parent_func: typing.Union[str, types.FunctionType] = parent_func
+    wrapped_func_space: str = naming.calc_func_space(wrapped_func)
     wrapped_func_work_key: str = parent_func_done_key
-    wrapped_func_done_key: str = hashlib.sha1(''.join([wrapped_func_space, 'done']).encode(ENCODING)).hexdigest()
+    wrapped_func_done_key: str = naming.calc_func_key(wrapped_func_space, 'done')
     wrapped_func_build_dir: str = os.path.join('/tmp', wrapped_func_space, 'build')
+
+    # if isinstance(parent_func, str):
+    #     print('parent_func_work_key', parent_func, wrapped_func.__name__, parent_func_work_key)
+    #     print('parent_func_done_key', parent_func, wrapped_func.__name__, parent_func_done_key)
+    #     print('wrapped_func_work_key', parent_func, wrapped_func.__name__, wrapped_func_work_key)
+    #     print('wrapped_func_done_key', parent_func, wrapped_func.__name__, wrapped_func_done_key)
+    # else:
+    #     print('parent_func_work_key', parent_func.__name__, wrapped_func.__name__, parent_func_work_key)
+    #     print('parent_func_done_key', parent_func.__name__, wrapped_func.__name__, parent_func_done_key)
+    #     print('wrapped_func_work_key', parent_func.__name__, wrapped_func.__name__, wrapped_func_work_key)
+    #     print('wrapped_func_done_key', parent_func.__name__, wrapped_func.__name__, wrapped_func_done_key)
+    # import ipdb; ipdb.set_trace()
 
     if getattr(wrapped_func, 'func_space', None) is None:
       wrapped_func.func_space = wrapped_func_space
@@ -75,6 +93,21 @@ def follow(
 
     if getattr(wrapped_func, 'schema', None) is None:
       wrapped_func.schema = schema
+
+    if getattr(wrapped_func, 'parent_space', None) is None:
+      if parent_func_space != NOOP_SPACE:
+        wrapped_func.parent_space = parent_func_space
+        wrapped_func.parent_func_work_key = parent_func.work_key
+        wrapped_func.parent_func_done_key = parent_func.done_key
+        wrapped_func.parent_noop_space = False
+        wrapped_func.parent_funcs = _merge_parent_funcs(parent_func)
+
+      else:
+        wrapped_func.parent_space = None
+        wrapped_func.parent_func_work_key = None
+        wrapped_func.parent_func_done_key = None
+        wrapped_func.parent_noop_space = True
+        wrapped_func.parent_funcs = []
 
     @functools.wraps(wrapped_func)
     def _wrapper(*args, **kwargs):

@@ -95,6 +95,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         if int(memory_size / 64) != memory_size / 64:
             raise bert_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
 
+        batch_size: int = bert_shortcuts.get_if_exists('batch_size', '250', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         timeout: int = bert_shortcuts.get_if_exists('timeout', '900', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         env_vars: typing.Dict[str, str] = bert_shortcuts.merge_env_vars(
             bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
@@ -106,20 +107,29 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
 
+        if job.pipeline_type is bert_constants.PipelineType.BOTTLE and job.parent_noop_space == False:
+            job_handler = f'{job.func_space}.{job_name}_manager'
+
+        else:
+            job_handler = f'{job.func_space}.{job_name}_handler'
+
         confs[job_name] = {
                 'job': job,
                 'deployment': {key: value for key, value in deployment_config._asdict().items()},
-                'aws-deployed': {},
+                'aws-deployed': {
+                    'events': {}
+                },
                 'aws-deploy': {
                     'timeout': timeout,
                     'runtime': runtime,
                     'memory-size': memory_size, # must be a multiple of 64, increasing memory size also increases cpu allocation
                     'requirements': requirements,
-                    'handler': f'{bert_naming.calc_lambda_name(job_name)}.{job_name}_handler',
-                    'lambda-name': f'{bert_naming.calc_lambda_name(job_name)}',
-                    'work-table-name': f'{bert_naming.calc_table_name(job.work_key)}',
-                    'done-table-name': f'{bert_naming.calc_table_name(job.done_key)}',
+                    'handler': job_handler,
+                    'lambda-name': job_name,
+                    'work-table-name': job.work_key,
+                    'done-table-name': job.done_key,
                     'environment': env_vars,
+                    'batch-size': batch_size,
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),
@@ -131,6 +141,13 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'environment': env_vars,
                     'max-retries': 10,
                 },
+                'events': {
+                    'rule-name': f'cw-rule-{job_name}',
+                    # "cron(0 20 * * ? *)" or "rate(5 minutes)"
+                    'rate': 'rate(1 minute)',
+                    # 'rate': 'rate(5 minutes)',
+                    'target-id': f'cw-target-{job_name}',
+                },
                 'spaces': {
                     'func_space': job.func_space,
                     'work-key': job.work_key,
@@ -138,6 +155,12 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'pipeline-type': job.pipeline_type,
                     'workers': job.workers,
                     'scheme': job.schema,
+                    'parent': {
+                        'noop-space': job.parent_noop_space,
+                        'space': job.parent_space,
+                        'work-key': job.parent_func_work_key,
+                        'done-key': job.parent_func_done_key,
+                    }
                 },
                 'encoding': {
                     'identity_encoders': identity_encoders,
@@ -145,6 +168,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'queue_decoders': queue_decoders,
                 }
             }
+        pass
 
     return confs
 
@@ -167,17 +191,20 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
 def comm_binders(func: types.FunctionType) -> typing.Tuple['QueueType', 'QueueType', 'ologger']:
     logger.info(f'Bert Queue Type[{bert_constants.QueueType}]')
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
+    # ologger.info(f'Func Keys: {func.__name__}')
+    # ologger.info(f'Work: {func.work_key}')
+    # ologger.info(f'Done: {func.done_key}')
     if bert_constants.QueueType is bert_constants.QueueTypes.Dynamodb:
-        return bert_queues.DynamodbQueue(func.work_key), bert_queues.DynamodbQueue(func.done_key), ologger
+        return bert_queues.DynamodbQueue(func.work_key, func.pipeline_type), bert_queues.DynamodbQueue(func.done_key, func.pipeline_type), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.StreamingQueue:
-        return bert_queues.StreamingQueue(func.work_key), bert_queues.StreamingQueue(func.done_key), ologger
+        return bert_queues.StreamingQueue(func.work_key, func.pipeline_type), bert_queues.StreamingQueue(func.done_key, func.pipeline_type), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.LocalQueue:
-        return bert_queues.LocalQueue(func.work_key), bert_queues.LocalQueue(func.done_key), ologger
+        return bert_queues.LocalQueue(func.work_key, func.pipeline_type), bert_queues.LocalQueue(func.done_key, func.pipeline_type), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.Redis:
-        return bert_queues.RedisQueue(func.work_key), bert_queues.RedisQueue(func.done_key), ologger
+        return bert_queues.RedisQueue(func.work_key, func.pipeline_type), bert_queues.RedisQueue(func.done_key, func.pipeline_type), ologger
 
     else:
         raise NotImplementedError(f'Unsupported QueueType[{bert_constants.QueueType}]')

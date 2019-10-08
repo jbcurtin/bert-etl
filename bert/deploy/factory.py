@@ -58,7 +58,9 @@ def deploy_service(options) -> None:
         bert_deploy_utils.destroy_lambdas(jobs)
         bert_deploy_utils.create_lambdas(jobs)
         bert_deploy_utils.create_dynamodb_tables(jobs)
+        bert_deploy_utils.create_reporting_dynamodb_table()
         bert_deploy_utils.bind_lambdas_to_tables(jobs)
+        bert_deploy_utils.bind_lambdas_to_events(jobs)
 
     else:
         raise NotImplementedError(options.service)

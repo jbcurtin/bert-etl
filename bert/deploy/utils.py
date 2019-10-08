@@ -12,8 +12,17 @@ import types
 import typing
 import zipfile
 
-from bert import utils as bert_utils, encoders as bert_encoders, exceptions as bert_exceptions
-from bert.deploy import shortcuts as bert_deploy_shortcuts, exceptions as deploy_exceptions
+from bert import \
+    utils as bert_utils, \
+    encoders as bert_encoders, \
+    exceptions as bert_exceptions, \
+    constants as bert_constants
+
+from bert.deploy import \
+    shortcuts as bert_deploy_shortcuts, \
+    exceptions as deploy_exceptions, \
+    reporting as bert_reporting
+
 from botocore.errorfactory import ClientError
 
 from distutils.sysconfig import get_python_lib
@@ -95,55 +104,105 @@ def find_site_packages_dir(start: str, find: str) -> str:
 def build_lambda_handlers(jobs: typing.Dict[str, typing.Dict[str, typing.Any]]) -> None:
     for job_name, conf in jobs.items():
         job_source: str = inspect.getsource(conf['job']).split('\n')
-        job_templates: str = ''.join([f"""def {jn}():
+        job_templates: typing.List[str] = []
+        previous_job: str = None
+        head_templates: typing.List[str] = []
+        tail_templates: typing.List[str] = []
+        head_on: bool = True
+        for sub_name, sub_conf in jobs.items():
+            if sub_name == job_name:
+                previous_job = sub_name
+                head_on = False
+                continue
+
+            if previous_job:
+                template: str = '''
+@binding.follow(%(parent_name)s)
+def %(job_name)s() -> None:
     pass
-""" for jn in jobs.keys() if jn != job_name])
+'''% {
+    'parent_name': previous_job,
+    'job_name': sub_name
+}
+            else:
+                template: str = '''
+@binding.follow('noop')
+def %(job_name)s() -> None:
+    pass
+''' % {
+    'job_name': sub_name
+}
+
+            if head_on:
+                head_templates.append(template)
+
+            else:
+                tail_templates.append(template)
+
+            previous_job = sub_name
+        else:
+            head_templates: str = ''.join(head_templates)
+            tail_templates: str = ''.join(tail_templates)
+
         source_code: str = """
 import typing
-%s
 
 from bert import utils, constants, binding, shortcuts, encoders
+from bert.deploy import reporting
 
-encoders.load_identity_encoders(%s)
-encoders.load_queue_encoders(%s)
-encoders.load_queue_decoders(%s)
+encoders.load_identity_encoders(%(identity_encoders)s)
+encoders.load_queue_encoders(%(queue_encoders)s)
+encoders.load_queue_decoders(%(queue_decoders)s)
 
-%s
+%(head_templates)s
 
-def %s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
+%(job_source)s
 
-    records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
-    if len(records) > 0 and constants.DEBUG == False:
-        constants.QueueType = constants.QueueTypes.StreamingQueue
-        work_queue, done_queue, ologger = utils.comm_binders(%s)
-        for record in records:
-            if record['eventName'].lower() == 'INSERT'.lower():
-                work_queue.local_put(record['dynamodb']['NewImage'])
+def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
+    with reporting.track_execution(%(job_name)s):
+        records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
+        if len(records) > 0 and constants.DEBUG == False:
+            constants.QueueType = constants.QueueTypes.StreamingQueue
+            work_queue, done_queue, ologger = utils.comm_binders(%(job_name)s)
+            for record in records:
+                if record['eventName'].lower() == 'INSERT'.lower():
+                    work_queue.local_put(record['dynamodb']['NewImage'])
 
-    elif constants.DEBUG:
-        constants.QueueType = constants.QueueTypes.LocalQueue
-        work_queue, done_queue, ologger = utils.comm_binders(%s)
-        work_queue.local_put(event)
+        elif constants.DEBUG:
+            constants.QueueType = constants.QueueTypes.LocalQueue
+            work_queue, done_queue, ologger = utils.comm_binders(%(job_name)s)
+            work_queue.local_put(event)
 
-    else:
-        work_queue, done_queue, ologger = utils.comm_binders(%s)
+        else:
+            work_queue, done_queue, ologger = utils.comm_binders(%(job_name)s)
 
-    ologger.info(f'QueueType[{constants.QueueType}]')
-    %s()
+        ologger.info('Executing Concurrent Function')
+        ologger.info(f'QueueType[{constants.QueueType}]')
+        %(job_name)s()
 
-""" % (
-    job_templates,
-    conf['encoding']['identity_encoders'],
-    conf['encoding']['queue_encoders'],
-    conf['encoding']['queue_decoders'],
-    '\n'.join(job_source),
-    job_name,
-    job_name,
-    job_name,
-    job_name,
-    job_name)
 
-        conf['lambda-path'] = os.path.join(conf['aws-build']['path'], f'{job_name}.py')
+def %(job_name)s_manager(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
+    execution_manager = reporting.manager(%(job_name)s)
+    if execution_manager.is_safe():
+        with reporting.track_execution(%(job_name)s):
+            work_queue, done_queue, ologger = utils.comm_binders(%(job_name)s)
+            ologger.info('Executing Bottle Function')
+            ologger.info(f'QueueType[{constants.QueueType}]')
+            %(job_name)s()
+
+%(tail_templates)s
+""" % {
+    'head_templates': head_templates,
+    'tail_templates': tail_templates,
+    'job_source': '\n'.join(job_source),
+    'job_name': job_name,
+    'identity_encoders': conf['encoding']['identity_encoders'],
+    'identity_encoders': conf['encoding']['identity_encoders'],
+    'queue_encoders': conf['encoding']['queue_encoders'],
+    'queue_decoders': conf['encoding']['queue_decoders'],
+}
+
+        conf['lambda-path'] = os.path.join(conf['aws-build']['path'], f'{conf["job"].func_space}.py')
         logger.info(f'Creating Lambda Handler[{conf["lambda-path"]}]')
         with open(conf['lambda-path'], 'w') as stream:
             stream.write(source_code)
@@ -306,6 +365,32 @@ def scan_dynamodb_tables(jobs: typing.Dict[str, typing.Dict[str, typing.Any]]) -
         except ClientError as err:
             conf['aws-deployed']['done-table'] = None
 
+def create_reporting_dynamodb_table() -> None:
+    client = boto3.client('dynamodb')
+    try:
+        client.describe_table(TableName=bert_reporting.TABLE_NAME)
+    except ClientError as err:
+        logger.info(f'Creating Dynamodb Table[{bert_reporting.TABLE_NAME}]')
+        client.create_table(
+            TableName=bert_reporting.TABLE_NAME,
+            KeySchema=[
+                {
+                    'AttributeName': 'identity',
+                    'KeyType': 'HASH',
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'identity',
+                    'AttributeType': 'S',
+                }
+            ],
+            StreamSpecification={
+                'StreamEnabled': False,
+            },
+            BillingMode='PAY_PER_REQUEST')
+
+
 def create_dynamodb_tables(jobs: typing.Dict[str, typing.Dict[str, typing.Any]]) -> None:
     client = boto3.client('dynamodb')
     for job_name, conf in jobs.items():
@@ -371,8 +456,8 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
                 "Principal": {
                     "Service": [
                         # "apigateway.amazonaws.com",
-                        "lambda.amazonaws.com",
-                        # "events.amazonaws.com",
+                        # "lambda.amazonaws.com", # Used to call lambdas from within another lambda
+                        "events.amazonaws.com", # Used for Scheduling lambda execution
                         # "dynamodb.amazonaws.com",
                     ]
                 },
@@ -403,6 +488,19 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
                     "logs:CreateLogGroup",
                 ],
                 "Resource": "arn:aws:logs:*:*:*",
+            },
+            # These permissions need to be ironed out
+            {
+                "Sid": "CloudWatchEventsFullAccess",
+                "Effect": "Allow",
+                "Action": "events:*",
+                "Resource": "*"
+            },
+            {
+                "Sid": "IAMPassRoleForCloudWatchEvents",
+                "Effect": "Allow",
+                "Action": "iam:PassRole",
+                "Resource": "arn:aws:iam::*:role/AWS_Events_Invoke_Targets"
             }
         ]
     }
@@ -438,13 +536,24 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
 
 def destroy_lambda_to_table_bindings(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
+    dynamodb_client = boto3.client('dynamodb')
     for job_name, conf in jobs.items():
-        if conf['aws-deployed']['work-table'] is None:
+        if conf['spaces']['parent']['noop-space'] is True:
             continue
 
-        logger.info(f'Destroying mappings between Lambda[{job_name}] and Work-Table[{conf["aws-deploy"]["work-table-name"]}]')
+        elif conf['spaces']['pipeline-type'] == bert_constants.PipelineType.BOTTLE:
+            continue
+
+        try:
+            parent_table = dynamodb_client.describe_table(TableName=conf['spaces']['parent']['done-key'])
+        except ClientError:
+            return None
+
+        parent_table_name = parent_table['Table']['TableName']
+        parent_stream_arn = parent_table['Table']['LatestStreamArn']
+        logger.info(f'Destroying mappings between Lambda[{job_name}] and Work-Table[{parent_table_name}]')
         for event_mapping in client.list_event_source_mappings(
-                EventSourceArn=conf['aws-deployed']['work-table']['Table']['LatestStreamArn'],
+                EventSourceArn=parent_stream_arn,
                 FunctionName=conf['aws-deploy']['lambda-name'])['EventSourceMappings']:
             client.delete_event_source_mapping(UUID=event_mapping['UUID'])
 
@@ -515,7 +624,7 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 Code=code_config,
                 Timeout=conf['aws-deploy']['timeout'],
                 Environment={'Variables': conf['aws-deploy']['environment']})
-            conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])
+            conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
 
         else:
             logger.info(f'Replacing AWSLambda for Job[{job_name}]')
@@ -530,15 +639,171 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 Timeout=conf['aws-deploy']['timeout'],
                 Environment={'Variables': conf['aws-deploy']['environment']},
             )
-            conf['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
+            conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
+
 
 def bind_lambdas_to_tables(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
+    dynamodb_client = boto3.client('dynamodb')
     for job_name, conf in jobs.items():
-        logger.info(f'Mapping Lambda[{job_name}] to Work-Table[{conf["aws-deploy"]["work-table-name"]}]')
+        if conf['spaces']['parent']['noop-space'] is True:
+            continue
+
+        elif conf['spaces']['pipeline-type'] == bert_constants.PipelineType.BOTTLE:
+            continue
+
+        parent_table = dynamodb_client.describe_table(TableName=conf['spaces']['parent']['done-key'])
+        parent_table_name = parent_table['Table']['TableName']
+        parent_stream_arn = parent_table['Table']['LatestStreamArn']
+        logger.info(f'Mapping Lambda[{job_name}] to Work-Table[{parent_table_name}]')
         client.create_event_source_mapping(
-            EventSourceArn=conf['aws-deployed']['work-table']['Table']['LatestStreamArn'],
+            EventSourceArn=parent_stream_arn,
             FunctionName=conf['aws-deploy']['lambda-name'],
+            BatchSize=conf['aws-deploy']['batch-size'],
             Enabled=True,
             StartingPosition='LATEST')
+
+def bind_lambdas_to_events(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('events')
+    for job_name, conf in jobs.items():
+        if conf['spaces']['parent']['noop-space'] is True:
+            continue
+
+        elif conf['spaces']['pipeline-type'] == bert_constants.PipelineType.CONCURRENT:
+            continue
+
+        logger.info(f'Scheduling[{conf["events"]["rate"]}] Lambda[{job_name}] to Cloudwatch Events')
+
+        # Make Rule
+        try:
+            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
+
+        except ClientError:
+            client.put_rule(
+                Name=conf['events']['rule-name'],
+                ScheduleExpression=conf['events']['rate'],
+                RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                State='ENABLED')
+
+            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
+
+        else:
+            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
+                target_ids = [t['Id'] for t in page['Targets']]
+                if target_ids:
+                    client.remove_targets(Rule=conf['events']['rule-name'], Ids=target_ids)
+
+            client.delete_rule(Name=conf['events']['rule-name'])
+            client.put_rule(
+                Name=conf['events']['rule-name'],
+                ScheduleExpression=conf['events']['rate'],
+                RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                State='ENABLED')
+            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
+
+            # Remove old targets
+            target = None
+            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
+                target_ids = [target['Id'] for target in page['Targets']]
+                if len(target_ids) > 0:
+                    client.remove_targets(
+                        Rule=conf['events']['rule-name'],
+                        Ids=target_ids,
+                        Force=True)
+
+            # Add permissions
+            lambda_client = boto3.client('lambda')
+            lambda_client.add_permission(
+                FunctionName=conf['aws-deploy']['lambda-name'],
+                StatementId=f'{conf["events"]["rule-name"]}-Event',
+                Action='lambda:InvokeFunction',
+                Principal='events.amazonaws.com',
+                SourceArn=conf['aws-deployed']['events']['schedule-rule']['Arn'])
+
+            if target is None:
+                client.put_targets(
+                    Rule=conf['events']['rule-name'],
+                    Targets=[{
+                        'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
+                        'Id': conf['events']['target-id'],
+                    }])
+
+        # from datetime import datetime
+        # # Make Event
+        # client.put_events(Entries=[{
+        #         'Time': datetime.utcnow(),
+        #         'Resources': [target['Arn']],
+        #     }])
+
+        import ipdb; ipdb.set_trace()
+        pass
+
+    # for job_name, conf in jobs.items():
+    #     if conf['spaces']['parent']['noop-space'] == True:
+    #         continue
+
+    #     elif conf['spaces']['pipeline-type'] != bert_constants.PipelineType.BOTTLE:
+    #         continue
+
+    #     try:
+    #         conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
+    #     except ClientError:
+    #         client.put_rule(
+    #             Name=conf['events']['rule-name'],
+    #             ScheduleExpression=conf['events']['rate'],
+    #             RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+    #             State='ENABLED')
+
+    #         conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
+    #     else:
+    #         for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
+    #             target_ids = [target['Id'] for target in page['Targets']]
+    #             client.remove_targets(
+    #                 Rule=conf['events']['rule-name'],
+    #                 Ids=target_ids)
+    #         else:
+    #             client.put_rule(
+    #                 Name=conf['events']['rule-name'],
+    #                 ScheduleExpression=conf['events']['rate'],
+    #                 RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+    #                 State='ENABLED')
+
+    #             conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
+
+    # import ipdb ;ipdb.set_trace()
+    # pass
+    #         for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
+    #             if len(page['Targets']) == 0:
+    #                 resp = events_client.put_targets(
+    #                     Rule=conf['events']['rule-name'],
+    #                     Targets=[{
+    #                         'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
+    #                         'Id': conf['events']['target-id'],
+    #                     }]
+    #                 )
+
+    #             elif len(page['Targets']) > 0:
+    #                 try:
+    #                     target = [target for target in page['Targets'] if target['Id'] == conf['events']['target-id']][0]
+    #                 except IndexError:
+    #                     import ipdb; ipdb.set_trace()
+    #                     pass
+
+    #                 else:
+    #                     import ipdb; ipdb.set_trace()
+    #                     events_client.remove_targets(
+    #                         Rule=conf['events']['rule-name'],
+    #                         Ids=[target['Id']]
+    #                     )
+    #                     events_client.put_targets(
+    #                         Rule=conf['events']['rule-name'],
+    #                         Targets=[{
+    #                             'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
+    #                             'Id': conf['events']['target-id'],
+    #                         }]
+    #                     )
+    #         # for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
+
+    #     else:
+    #         raise NotImplementedError('Invalid Configuration')
 
