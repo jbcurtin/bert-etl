@@ -3,6 +3,7 @@ import copy
 import hashlib
 import logging
 import json
+import time
 import typing
 
 from bert import \
@@ -10,10 +11,11 @@ from bert import \
     datasource as bert_datasource, \
     constants as bert_constants
 
-# from botocore.errorfactory import ResourceNotFoundException
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 PWN = typing.TypeVar('PWN')
+DELAY: int = 15
 
 class DynamodbQueue:
     @staticmethod
@@ -49,11 +51,10 @@ class DynamodbQueue:
         return value
 
     def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
-        combined: str = ''.join(sorted(bert_encoders.encode_identity_object(value)))
+        combined: str = ''.join(bert_encoders.encode_identity_object(value))
         identity: str = hashlib.sha256(combined.encode('utf-8')).hexdigest()
-        value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
         client: typing.Any = boto3.client('dynamodb')
-        # logger.info(f'Putting Item in Table[{self._key}]')
+        value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
         client.put_item(TableName=self._key, Item=value)
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
@@ -98,15 +99,23 @@ class StreamingQueue(DynamodbQueue):
         else:
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
             client = boto3.client('dynamodb')
-            # try:
-            logger.info(f'removing Item[{value["identity"]}] from table[{self._key}]')
-            client.delete_item(TableName=self._key, Key={'identity': value['identity']})
-            logger.info(f'removed Item[{value["identity"]}] from table[{self._key}]')
-            # except ResourceNotFoundException:
-            #     # If the object doesn't exist in Dynamodb, it means another function has
-            #     #  taken the object.
-            #     return None
+            local_timeout: datetime = datetime.utcnow() + timedelta(seconds=DELAY)
+            while local_timeout > datetime.utcnow():
+                try:
+                    client.delete_item(
+                        TableName=self._key,
+                        Key={'identity': value['identity']},
+                        Expected={'identity': {'Exists': True, 'Value': value['identity']}})
+                except client.exceptions.ConditionalCheckFailedException:
+                    time.sleep(.1)
+                    continue
 
+                else:
+                    break
+            else:
+                raise NotImplementedError(f'Unable to delete[{value["identity"]["S"]}] from table[{self._key}]')
+
+            # Confirm Delete
             return unpacked
 
 class LocalQueue(DynamodbQueue):

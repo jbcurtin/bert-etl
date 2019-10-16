@@ -130,6 +130,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'done-table-name': job.done_key,
                     'environment': env_vars,
                     'batch-size': batch_size,
+                    'batch-window': 3
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),
@@ -189,11 +190,8 @@ def run_command(cmd: str, allow_error: typing.List[int] = [0]) -> str:
 
 
 def comm_binders(func: types.FunctionType) -> typing.Tuple['QueueType', 'QueueType', 'ologger']:
-    logger.info(f'Bert Queue Type[{bert_constants.QueueType}]')
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
-    # ologger.info(f'Func Keys: {func.__name__}')
-    # ologger.info(f'Work: {func.work_key}')
-    # ologger.info(f'Done: {func.done_key}')
+    ologger.debug(f'Bert Queue Type[{bert_constants.QueueType}]')
     if bert_constants.QueueType is bert_constants.QueueTypes.Dynamodb:
         return bert_queues.DynamodbQueue(func.work_key, func.pipeline_type), bert_queues.DynamodbQueue(func.done_key, func.pipeline_type), ologger
 
@@ -211,12 +209,12 @@ def comm_binders(func: types.FunctionType) -> typing.Tuple['QueueType', 'QueueTy
 
 
 def flush_db():
-    if constants.QueueType in [
-        constants.QueueType.Dynamodb,
-        constants.QueueType.StreamingQueue]:
+    if bert_constants.QueueType in [
+        bert_constants.QueueType.Dynamodb,
+        bert_constants.QueueType.StreamingQueue]:
         raise NotImplementedError(f'Flush Dynamodb Tables')
 
-    elif constants.QueueType is constants.QueueType.Redis:
+    elif bert_constants.QueueType is bert_constants.QueueType.Redis:
         import redis
         from bert import constants, datasource
         redis_connection: datasource.RedisConnection = datasource.RedisConnection.ParseURL(constants.REDIS_URL)

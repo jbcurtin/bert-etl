@@ -42,8 +42,14 @@ def follow(
     pass
 
   elif isinstance(parent_func, types.FunctionType):
-    parent_func.work_key = parent_func_work_key
-    parent_func.done_key = parent_func_done_key
+    if getattr(parent_func, 'func_space', None) is None:
+        parent_func.func_space = parent_func_space
+
+    if getattr(parent_func, 'work_key', None) is None:
+        parent_func.work_key = parent_func_work_key
+
+    if getattr(parent_func, 'done_key', None) is None:
+        parent_func.done_key = parent_func_done_key
 
   elif isinstance(parent_func, str):
     raise NotImplementedError(f'Follow Parent[{parent_func}] is not valid. Must be types.FunctionType')
@@ -60,18 +66,6 @@ def follow(
     wrapped_func_work_key: str = parent_func_done_key
     wrapped_func_done_key: str = naming.calc_func_key(wrapped_func_space, 'done')
     wrapped_func_build_dir: str = os.path.join('/tmp', wrapped_func_space, 'build')
-
-    # if isinstance(parent_func, str):
-    #     print('parent_func_work_key', parent_func, wrapped_func.__name__, parent_func_work_key)
-    #     print('parent_func_done_key', parent_func, wrapped_func.__name__, parent_func_done_key)
-    #     print('wrapped_func_work_key', parent_func, wrapped_func.__name__, wrapped_func_work_key)
-    #     print('wrapped_func_done_key', parent_func, wrapped_func.__name__, wrapped_func_done_key)
-    # else:
-    #     print('parent_func_work_key', parent_func.__name__, wrapped_func.__name__, parent_func_work_key)
-    #     print('parent_func_done_key', parent_func.__name__, wrapped_func.__name__, parent_func_done_key)
-    #     print('wrapped_func_work_key', parent_func.__name__, wrapped_func.__name__, wrapped_func_work_key)
-    #     print('wrapped_func_done_key', parent_func.__name__, wrapped_func.__name__, wrapped_func_done_key)
-    # import ipdb; ipdb.set_trace()
 
     if getattr(wrapped_func, 'func_space', None) is None:
       wrapped_func.func_space = wrapped_func_space
@@ -96,6 +90,7 @@ def follow(
 
     if getattr(wrapped_func, 'parent_space', None) is None:
       if parent_func_space != NOOP_SPACE:
+        wrapped_func.parent_func = parent_func
         wrapped_func.parent_space = parent_func_space
         wrapped_func.parent_func_work_key = parent_func.work_key
         wrapped_func.parent_func_done_key = parent_func.done_key
@@ -104,6 +99,7 @@ def follow(
 
       else:
         wrapped_func.parent_space = None
+        wrapped_func.parent_func = 'noop'
         wrapped_func.parent_func_work_key = None
         wrapped_func.parent_func_done_key = None
         wrapped_func.parent_noop_space = True

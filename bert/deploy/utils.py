@@ -660,6 +660,7 @@ def bind_lambdas_to_tables(jobs: typing.Dict[str, typing.Any]) -> None:
             EventSourceArn=parent_stream_arn,
             FunctionName=conf['aws-deploy']['lambda-name'],
             BatchSize=conf['aws-deploy']['batch-size'],
+            MaximumBatchingWindowInSeconds=conf['aws-deploy']['batch-window'],
             Enabled=True,
             StartingPosition='LATEST')
 
