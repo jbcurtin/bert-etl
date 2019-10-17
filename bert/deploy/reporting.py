@@ -9,7 +9,7 @@ from botocore.errorfactory import ClientError
 
 from datetime import datetime, timedelta
 
-TABLE_NAME: str = 'reporting'
+TABLE_NAME: str = 'bert-etl-reporting'
 PWN: typing.TypeVar = typing.TypeVar('PWN')
 logger = logging.getLogger(__name__)
 

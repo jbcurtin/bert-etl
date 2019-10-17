@@ -176,7 +176,6 @@ def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lam
         else:
             work_queue, done_queue, ologger = utils.comm_binders(%(job_name)s)
 
-        ologger.info('Executing Concurrent Function')
         ologger.info(f'QueueType[{constants.QueueType}]')
         %(job_name)s()
 
@@ -281,6 +280,9 @@ def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
 
         # Resolve conda env site-packages location
         elif 'conda/envs' in get_python_lib() or 'miniconda/envs' in get_python_lib():
+            site_package_dir: str = get_python_lib()
+
+        else:
             site_package_dir: str = get_python_lib()
 
         if os.path.exists('.python-version'):
@@ -456,7 +458,7 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
                 "Principal": {
                     "Service": [
                         # "apigateway.amazonaws.com",
-                        # "lambda.amazonaws.com", # Used to call lambdas from within another lambda
+                        "lambda.amazonaws.com", # Used to call lambdas from within another lambda
                         "events.amazonaws.com", # Used for Scheduling lambda execution
                         # "dynamodb.amazonaws.com",
                     ]
@@ -465,15 +467,22 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
             }
         ]
     }
+    region_name: str = boto3.session.Session().region_name
+    account_id: str = boto3.client('sts').get_caller_identity().get('Account')
     policy_document = {
         "Version": "2012-10-17",
         "Statement": [
             {
                 "Effect": "Allow",
                 "Action": [
-                    "dynamodb:*"
+                    "dynamodb:Get*",
+                    "dynamodb:PutItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Scan",
+                    "dynamodb:DescribeStream",
+                    "dynamodb:ListStreams"
                 ],
-                "Resource": "arn:aws:dynamodb:*:*:table/bert-etl-*",
+                "Resource": f"arn:aws:dynamodb:{region_name}:{account_id}:table/*",
             },
             {
                 "Effect": "Allow",
@@ -613,7 +622,7 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
 
         try:
             client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
-        except ClientError as err:
+        except (ClientError, client.exceptions.ResourceNotFoundException) as err:
             logger.info(f'Creating AWSLambda for Job[{job_name}]')
             lambda_description = client.create_function(
                 FunctionName=conf['aws-deploy']['lambda-name'],
@@ -729,82 +738,4 @@ def bind_lambdas_to_events(jobs: typing.Dict[str, typing.Any]) -> None:
                         'Id': conf['events']['target-id'],
                     }])
 
-        # from datetime import datetime
-        # # Make Event
-        # client.put_events(Entries=[{
-        #         'Time': datetime.utcnow(),
-        #         'Resources': [target['Arn']],
-        #     }])
-
-        import ipdb; ipdb.set_trace()
-        pass
-
-    # for job_name, conf in jobs.items():
-    #     if conf['spaces']['parent']['noop-space'] == True:
-    #         continue
-
-    #     elif conf['spaces']['pipeline-type'] != bert_constants.PipelineType.BOTTLE:
-    #         continue
-
-    #     try:
-    #         conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
-    #     except ClientError:
-    #         client.put_rule(
-    #             Name=conf['events']['rule-name'],
-    #             ScheduleExpression=conf['events']['rate'],
-    #             RoleArn=conf['aws-deployed']['iam-role']['Arn'],
-    #             State='ENABLED')
-
-    #         conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
-    #     else:
-    #         for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
-    #             target_ids = [target['Id'] for target in page['Targets']]
-    #             client.remove_targets(
-    #                 Rule=conf['events']['rule-name'],
-    #                 Ids=target_ids)
-    #         else:
-    #             client.put_rule(
-    #                 Name=conf['events']['rule-name'],
-    #                 ScheduleExpression=conf['events']['rate'],
-    #                 RoleArn=conf['aws-deployed']['iam-role']['Arn'],
-    #                 State='ENABLED')
-
-    #             conf['aws-deployed']['events'][conf['events']['rule-name']] = client.describe_rule(Name=conf['events']['rule-name'])
-
-    # import ipdb ;ipdb.set_trace()
-    # pass
-    #         for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
-    #             if len(page['Targets']) == 0:
-    #                 resp = events_client.put_targets(
-    #                     Rule=conf['events']['rule-name'],
-    #                     Targets=[{
-    #                         'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
-    #                         'Id': conf['events']['target-id'],
-    #                     }]
-    #                 )
-
-    #             elif len(page['Targets']) > 0:
-    #                 try:
-    #                     target = [target for target in page['Targets'] if target['Id'] == conf['events']['target-id']][0]
-    #                 except IndexError:
-    #                     import ipdb; ipdb.set_trace()
-    #                     pass
-
-    #                 else:
-    #                     import ipdb; ipdb.set_trace()
-    #                     events_client.remove_targets(
-    #                         Rule=conf['events']['rule-name'],
-    #                         Ids=[target['Id']]
-    #                     )
-    #                     events_client.put_targets(
-    #                         Rule=conf['events']['rule-name'],
-    #                         Targets=[{
-    #                             'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
-    #                             'Id': conf['events']['target-id'],
-    #                         }]
-    #                     )
-    #         # for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
-
-    #     else:
-    #         raise NotImplementedError('Invalid Configuration')
 

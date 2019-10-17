@@ -28,7 +28,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.4.20'
+version = '0.4.26'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -54,11 +54,13 @@ setup(
     install_requires=[
         'redis==3.3.5',
         'marshmallow==2.19.5',
+        'boto3==1.9.251',
+        'pyyaml',
     ],
     entry_points={
         'console_scripts': [
             'bert-deploy.py = bert.deploy.factory:run_from_cli',
-            'bert-runner.py = bert.factory:run_from_cli',
+            'bert-runner.py = bert.runner.factory:run_from_cli',
         ]
     },
     zip_safe=False,
