@@ -7,6 +7,7 @@ import importlib
 import inspect
 import logging
 import multiprocessing
+import json
 import os
 import signal
 import time
@@ -42,11 +43,18 @@ def deploy_service(options) -> None:
         if options.invoke:
             import boto3
             job_name: str = [job for job in jobs.keys()][0]
+            invoke_args: typing.List[typing.Dict[str, typing.Any]] = {key: value for key, value in jobs.items()}[job_name]['aws-deploy']['invoke-args']
             client = boto3.client('lambda')
-            logger.info(f'Invoking Job[{job_name}]')
-            client.invoke(
-                FunctionName=job_name,
-                InvocationType='Event')
+            if len(invoke_args) < 1:
+                logger.info(f'Invoking Job[{job_name}]')
+                client.invoke(FunctionName=job_name, InvocationType='Event')
+
+            else:
+                logger.info(f'Invoking Job[{job_name}] with {len(invoke_args)} payloads.')
+                for args in invoke_args:
+                    payload: bytes = json.dumps(args).encode('utf-8')
+                    client.invoke(FunctionName=job_name, InvocationType='Event', Payload=payload)
+
             import sys; sys.exit(0)
 
         bert_deploy_utils.validate_inputs(jobs)

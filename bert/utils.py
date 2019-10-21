@@ -85,15 +85,20 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get(job_name,        {'queue_decoders': []}).get('queue_decoders', []),
             ['bert.encoders.base.decode_aws_object'])
 
+        invoke_args: typing.List[str] = bert_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'invoke_args': []}).get('invoke_args', []),
+            bert_configuration.get(job_name,        {'invoke_args': []}).get('invoke_args', []),
+            [])
+
+        invoke_args: typing.List[typing.Dict[str, typing.Any]] = bert_shortcuts.load_invoke_args(invoke_args)
+
         # Make sure the encoders exist
         bert_encoders.load_encoders_or_decoders(identity_encoders)
         bert_encoders.load_encoders_or_decoders(queue_encoders)
         bert_encoders.load_encoders_or_decoders(queue_decoders)
 
+        # concurrency_limit is checked against AWS account execution limit in bert.deploy.utils
         concurrency_limit: int = bert_shortcuts.get_if_exists('concurrency_limit', '0', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
-        # if concurrency_limit < 100:
-        #     raise bert_exceptions.BertConfigError(f'Concurrency Limit[{concurrency_limit}] must be greater than 100')
-
         runtime: int = bert_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         memory_size: int = bert_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         if int(memory_size / 64) != memory_size / 64:
@@ -136,6 +141,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'batch-size': batch_size,
                     'batch-window': 3,
                     'concurrency-limit': concurrency_limit,
+                    'invoke-args': invoke_args,
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),

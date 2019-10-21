@@ -1,7 +1,10 @@
 import boto3
 import collections
+import importlib
+import json
 import logging
 import os
+import types
 import typing
 import yaml
 
@@ -9,6 +12,8 @@ from bert import \
     exceptions as bert_exceptions
 
 from botocore.errorfactory import ClientError
+
+from json.decoder import JSONDecodeError
 
 logger = logging.getLogger(__name__)
 
@@ -102,4 +107,60 @@ def get_if_exists(key: str, default: typing.Any, data_type: typing.Any, defaults
         return data_type(defaults.get(key, default))
     except ValueError:
         raise bert_exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
+
+def _load_invoke_args_module(member_route: str) -> typing.Dict[str, typing.Any]:
+    try:
+        module_path, member_name = member_route.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+    except ValueError:
+        raise ImportError
+
+    else:
+        member: typing.Union[typing.Dict[str, typing.Any], types.FunctionType, None] = getattr(module, member_name, None)
+        if member is None:
+            raise ImportError
+
+        elif isinstance(member, dict):
+            return member
+
+        elif isinstance(member, types.FunctionType):
+            return member()
+
+        else:
+            raise NotImplementedError(member)
+
+def load_invoke_args(invoke_args: typing.List[str]) -> typing.List[typing.Dict[str, typing.Any]]:
+    loaded: typing.List[typing.Dict[str, typing.Any]] = []
+    for invoke_item in invoke_args:
+        if isinstance(invoke_item, dict):
+            # yaml
+            loaded.append(invoke_item)
+
+        elif invoke_item.endswith('.json'):
+            with open(invoke_item, 'r') as stream:
+                loaded.append(json.loads(stream.read()))
+
+        elif invoke_item.endswith('.yaml') or invoke_item.endswith('.yml'):
+            with open(invoke_item, 'r') as stream:
+                loaded.append(yaml.load(stream.read(), Loader=yaml.FullLoader))
+
+        else:
+            try:
+                loaded.append(_load_invoke_args_module(invoke_item))
+            except ImportError:
+                pass
+            else:
+                continue
+
+            try:
+                loaded.append(json.loads(invoke_item))
+            except JSONDecodeError:
+                pass
+
+            else:
+                continue
+
+            raise NotImplementedError
+
+    return loaded
 
