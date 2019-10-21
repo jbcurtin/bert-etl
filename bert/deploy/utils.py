@@ -261,6 +261,28 @@ def include_bert_dev(dev_path: str, build_path: str, excludes: typing.List[str] 
     copytree(dev_path, bert_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
 
 
+def validate_inputs(jobs: typing.Dict[str, typing.Any]) -> str:
+    client = boto3.client('lambda')
+    account_settings = client.get_account_settings()
+    account_concurrency_limit = account_settings['AccountLimit']['ConcurrentExecutions']
+    # Don't use UnreservedConcurrentExecutions because we'll release the ConcurrentExecutions with every deployment
+    for job_name, conf in jobs.items():
+        account_concurrency_limit = account_concurrency_limit - conf['aws-deploy']['concurrency-limit']
+        if account_concurrency_limit < 100:
+            
+            message = f"""
+The combination of functions uses more than {account_settings["AccountLimit"]["ConcurrentExecutions"]} executions.
+AWS imposes this restruction so that some functions will always be able to execute.
+Deployment Aborted
+"""
+            message += '\nJob Concurrency Settings: \n'
+            for job_name, c_limit in [(job_name, conf['aws-deploy']['concurrency-limit']) for job_name, conf in jobs.items()]:
+                message += f"{job_name}: {c_limit}\n"
+
+            message += f'Only {account_settings["AccountLimit"]["ConcurrentExecutions"]} concurrent executions allowed in this AWS Account'
+            message += '\nhttps://docs.aws.amazon.com/lambda/latest/dg/limits.html#limits'
+            raise bert_exceptions.BertConfigError(message)
+
 def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
     for job_name, conf in jobs.items():
         src_dir: str = None
@@ -566,6 +588,11 @@ def destroy_lambda_to_table_bindings(jobs: typing.Dict[str, typing.Any]) -> None
                 FunctionName=conf['aws-deploy']['lambda-name'])['EventSourceMappings']:
             client.delete_event_source_mapping(UUID=event_mapping['UUID'])
 
+def destroy_lambda_concurrency(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('lambda')
+    for job_name, conf in jobs.items():
+        client.delete_function_concurrency(FunctionName=conf['aws-deploy']['lambda-name'])
+
 def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
     for job_name, conf in jobs.items():
@@ -650,6 +677,13 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
             )
             conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
 
+def create_lambda_concurrency(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('lambda')
+    for job_name, conf in jobs.items():
+        if conf['aws-deploy']['concurrency-limit'] > 0:
+            client.put_function_concurrency(
+                FunctionName=conf['aws-deploy']['lambda-name'],
+                ReservedConcurrentExecutions=conf['aws-deploy']['concurrency-limit'])
 
 def bind_lambdas_to_tables(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')

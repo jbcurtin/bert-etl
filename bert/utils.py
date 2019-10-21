@@ -90,6 +90,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         bert_encoders.load_encoders_or_decoders(queue_encoders)
         bert_encoders.load_encoders_or_decoders(queue_decoders)
 
+        concurrency_limit: int = bert_shortcuts.get_if_exists('concurrency_limit', '0', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
+        # if concurrency_limit < 100:
+        #     raise bert_exceptions.BertConfigError(f'Concurrency Limit[{concurrency_limit}] must be greater than 100')
+
         runtime: int = bert_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         memory_size: int = bert_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         if int(memory_size / 64) != memory_size / 64:
@@ -130,7 +134,8 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'done-table-name': job.done_key,
                     'environment': env_vars,
                     'batch-size': batch_size,
-                    'batch-window': 3
+                    'batch-window': 3,
+                    'concurrency-limit': concurrency_limit,
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),
