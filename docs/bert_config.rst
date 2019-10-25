@@ -88,10 +88,17 @@ deployment
 `deployment` tells `bert-etl` how to and where to deploy the AWS Lambda functions.
 
 
-s3_bucket
-=+=+=+=+=
+==============  ==========================  =============================
+VAR Name        Description                 Example
+--------------  --------------------------  -----------------------------
+s3_bucket       Which bucket to deploy to?  bert-etl-lambda-source-bucket
 
-`s3_bucket` will create a bucket, if it doesn't already exist in your AWS Console. This is the bucket the codes are uploaded to if defined. With out this option, there is a limitation of 50mb.
+
+.. code-block:: yaml
+
+    deployment:
+        s3_bucket: bert-etl-lambda-source-bucket
+
 
 
 every_lambda
