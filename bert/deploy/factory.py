@@ -30,6 +30,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-s', '--service', default=Service.AWSLambda, type=Service)
     parser.add_argument('-u', '--undeploy', action="store_true", default=False)
     parser.add_argument('-i', '--invoke', action="store_true", default=False)
+    parser.add_argument('-a', '--invoke-async', default=False, action='store_true')
     parser.add_argument('-m', '--module-name', default='bert')
     parser.add_argument('-f', '--flush', default=False, action="store_true")
     parser.add_argument('-d', '--dry-run', default=False, action="store_true", help="Create the lambda functions and output ./lambdas without deploying to AWS")
@@ -51,8 +52,12 @@ def deploy_service(options) -> None:
 
             else:
                 logger.info(f'Invoking Job[{job_name}] with {len(invoke_args)} payloads.')
-                for args in invoke_args:
-                    payload: bytes = json.dumps(args).encode('utf-8')
+                if options.invoke_async:
+                    for args in invoke_args:
+                        payload: bytes = json.dumps({'bert-inputs': [args]}).encode(constants.ENCODING)
+                        client.invoke(FunctionName=job_name, InvocationType='Event', Payload=payload)
+                else:
+                    payload: bytes = json.dumps({'bert-inputs': invoke_args}).encode(constants.ENCODING)
                     client.invoke(FunctionName=job_name, InvocationType='Event', Payload=payload)
 
             import sys; sys.exit(0)
@@ -71,7 +76,8 @@ def deploy_service(options) -> None:
         bert_deploy_utils.create_dynamodb_tables(jobs)
         bert_deploy_utils.create_reporting_dynamodb_table()
         bert_deploy_utils.bind_lambdas_to_tables(jobs)
-        bert_deploy_utils.bind_lambdas_to_events(jobs)
+        bert_deploy_utils.bind_events_for_bottle_functions(jobs)
+        bert_deploy_utils.bind_events_for_init_function(jobs)
 
     else:
         raise NotImplementedError(options.service)

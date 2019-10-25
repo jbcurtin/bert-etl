@@ -104,6 +104,19 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         if int(memory_size / 64) != memory_size / 64:
             raise bert_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
 
+        # # events
+        # # sns topic to proc lambda
+        # sns_topic_arn: str = bert_shortcuts.get_if_exists(
+        #     'events.sns_topic_arn', None, str,
+        #     bert_configuration.get('every_lambda', {'events':{}}),
+        #     bert_configuration.get(f'{job_name}', {'events': {}}))
+
+        # schedule_expression will be validated before executing the deploy script
+        schedule_expression: str = bert_shortcuts.get_if_exists(
+            'events.schedule_expression', None, str,
+            bert_configuration.get('every_lambda', {'events':{}}),
+            bert_configuration.get(f'{job_name}', {'events': {}}))
+
         batch_size: int = bert_shortcuts.get_if_exists('batch_size', '250', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         timeout: int = bert_shortcuts.get_if_exists('timeout', '900', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         env_vars: typing.Dict[str, str] = bert_shortcuts.merge_env_vars(
@@ -126,7 +139,8 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                 'job': job,
                 'deployment': {key: value for key, value in deployment_config._asdict().items()},
                 'aws-deployed': {
-                    'events': {}
+                    'events': {},
+                    'bottle': {},
                 },
                 'aws-deploy': {
                     'timeout': timeout,
@@ -154,11 +168,13 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'max-retries': 10,
                 },
                 'events': {
-                    'rule-name': f'cw-rule-{job_name}',
+                    'schedule-expression': schedule_expression,
+                    # 'sns-topic-arn': sns_topic_arn,
                     # "cron(0 20 * * ? *)" or "rate(5 minutes)"
-                    'rate': 'rate(1 minute)',
                     # 'rate': 'rate(5 minutes)',
-                    'target-id': f'cw-target-{job_name}',
+                },
+                'bottle': {
+                    'schedule-expression': schedule_expression or 'rate(1 minute)',
                 },
                 'spaces': {
                     'func_space': job.func_space,

@@ -167,12 +167,19 @@ bert_encoders.load_queue_decoders(%(queue_decoders)s)
 def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
     with bert_reporting.track_execution(%(job_name)s):
         records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
+        bert_inputs: typing.Dict[str, typing.Any] = event.get('bert-inputs', None)
         if len(records) > 0 and bert_constants.DEBUG == False:
             bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
             work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
             for record in records:
                 if record['eventName'].lower() == 'INSERT'.lower():
                     work_queue.local_put(record['dynamodb']['NewImage'])
+
+        elif bert_inputs != None:
+            bert_constants.QueueType = bert_constants.QueueTypes.StreamSpecification
+            work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
+            for record in bert_inputs:
+                work_queue.local_put(record)
 
         elif bert_constants.DEBUG:
             bert_constants.QueueType = bert_constants.QueueTypes.LocalQueue
@@ -267,7 +274,7 @@ def include_bert_dev(dev_path: str, build_path: str, excludes: typing.List[str] 
     copytree(dev_path, bert_path, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
 
 
-def validate_inputs(jobs: typing.Dict[str, typing.Any]) -> str:
+def _validate_concurrency(jobs: typing.Dict[str, typing.Any]) -> str:
     client = boto3.client('lambda')
     account_settings = client.get_account_settings()
     account_concurrency_limit = account_settings['AccountLimit']['ConcurrentExecutions']
@@ -275,7 +282,7 @@ def validate_inputs(jobs: typing.Dict[str, typing.Any]) -> str:
     for job_name, conf in jobs.items():
         account_concurrency_limit = account_concurrency_limit - conf['aws-deploy']['concurrency-limit']
         if account_concurrency_limit < 100:
-            
+
             message = f"""
 The combination of functions uses more than {account_settings["AccountLimit"]["ConcurrentExecutions"]} executions.
 AWS imposes this restruction so that some functions will always be able to execute.
@@ -288,6 +295,62 @@ Deployment Aborted
             message += f'Only {account_settings["AccountLimit"]["ConcurrentExecutions"]} concurrent executions allowed in this AWS Account'
             message += '\nhttps://docs.aws.amazon.com/lambda/latest/dg/limits.html#limits'
             raise bert_exceptions.BertConfigError(message)
+
+def _validate_schedule_expression_cron_grammar(schedule_expression: str, job_name: str) -> None:
+    # raise NotImplementedError
+    pass
+
+def _validate_schedule_expression_rate_grammar(schedule_expression: str, job_name: str) -> None:
+    try:
+        count, interval = schedule_expression[5:-1].split(' ')
+    except (IndexError, ValueError):
+        raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{schedule_expression}] for job[{job_name}]')
+
+    else:
+        try:
+            count = int(count)
+        except ValueError:
+            raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{schedule_expression}]. Unable to parse rate to int for job[{job_name}]')
+
+        if count == 1 and interval != 'minute':
+            raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{schedule_expression}]. With rate = 1, interval must be "minute" for job[{job_name}]')
+
+        elif count > 1 and interval != 'minutes':
+            raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{schedule_expression}]. With rate > 1, interval must be "minutes" for job[{job_name}]')
+
+        elif count < 1:
+            raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{schedule_expression}]. Rate must be > 0 for job[{job_name}]')
+
+
+def _validate_schedule_expression(jobs: typing.Dict[str, typing.Any]) -> str:
+    for job_name, conf in jobs.items():
+        if conf['events']['schedule-expression'] is None:
+            continue
+
+        elif conf['events']['schedule-expression'].startswith('cron('):
+            _validate_schedule_expression_cron_grammar(conf['events']['schedule-expression'], job_name)
+
+        elif conf['events']['schedule-expression'].startswith('rate('):
+            _validate_schedule_expression_rate_grammar(conf['events']['schedule-expression'], job_name)
+
+
+def _validate_schedule_expression_bottle(jobs: typing.Dict[str, typing.Any]) -> str:
+    for job_name, conf in jobs.items():
+        if conf['spaces']['parent']['noop-space'] is False and conf['spaces']['pipeline-type'] == bert_constants.PipelineType.BOTTLE:
+            if conf['bottle']['schedule-expression'] is None:
+                raise bert_exceptions.BertConfigError(f'Unable to parse ScheduleExpression[{conf["bottle"]["schedule-expression"]}] for job[{job_name}].')
+
+            elif conf['bottle']['schedule-expression'].startswith('cron('):
+                _validate_schedule_expression_cron_grammar(conf['bottle']['schedule-expression'], job_name)
+
+            elif conf['bottle']['schedule-expression'].startswith('rate('):
+                _validate_schedule_expression_rate_grammar(conf['bottle']['schedule-expression'], job_name)
+
+
+def validate_inputs(jobs: typing.Dict[str, typing.Any]) -> str:
+    _validate_concurrency(jobs)
+    _validate_schedule_expression(jobs)
+    _validate_schedule_expression_bottle(jobs)
 
 def build_project(jobs: typing.Dict[str, typing.Any]) -> str:
     for job_name, conf in jobs.items():
@@ -597,7 +660,10 @@ def destroy_lambda_to_table_bindings(jobs: typing.Dict[str, typing.Any]) -> None
 def destroy_lambda_concurrency(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
     for job_name, conf in jobs.items():
-        client.delete_function_concurrency(FunctionName=conf['aws-deploy']['lambda-name'])
+        try:
+            client.delete_function_concurrency(FunctionName=conf['aws-deploy']['lambda-name'])
+        except client.exceptions.ResourceNotFoundException:
+            pass
 
 def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
@@ -713,69 +779,136 @@ def bind_lambdas_to_tables(jobs: typing.Dict[str, typing.Any]) -> None:
             Enabled=True,
             StartingPosition='LATEST')
 
-def bind_lambdas_to_events(jobs: typing.Dict[str, typing.Any]) -> None:
+
+def bind_events_for_bottle_functions(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('events')
     for job_name, conf in jobs.items():
-        if conf['spaces']['parent']['noop-space'] is True:
-            continue
+        if conf['spaces']['parent']['noop-space'] is False and bert_constants.PipelineType.BOTTLE == conf['spaces']['pipeline-type']:
+            logger.info(f'Scheduling[{conf["bottle"]["schedule-expression"]}] Lambda[{job_name}] to Cloudwatch Events')
 
-        elif conf['spaces']['pipeline-type'] == bert_constants.PipelineType.CONCURRENT:
-            continue
+            rule_name: str = f'{job_name}-bottle-interval'
+            target_id: str = f'{job_name}-bottle-target-id'
+            conf['aws-deployed']['bottle']['schedule-expression-rule-name'] = rule_name
+            conf['aws-deployed']['bottle']['schedule-expression-target-id'] = target_id
+            # Make Rule
+            try:
+                conf['aws-deployed']['bottle']['schedule-expression-rule-rule'] = client.describe_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
 
-        logger.info(f'Scheduling[{conf["events"]["rate"]}] Lambda[{job_name}] to Cloudwatch Events')
+            except client.exceptions.ResourceNotFoundException:
+                client.put_rule(
+                    Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
+                    ScheduleExpression=conf['bottle']['schedule-expression'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
 
-        # Make Rule
-        try:
-            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
+                conf['aws-deployed']['bottle']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
 
-        except ClientError:
-            client.put_rule(
-                Name=conf['events']['rule-name'],
-                ScheduleExpression=conf['events']['rate'],
-                RoleArn=conf['aws-deployed']['iam-role']['Arn'],
-                State='ENABLED')
+            else:
+                for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['bottle']['schedule-expression-rule-name']):
+                    target_ids = [t['Id'] for t in page['Targets']]
+                    if target_ids:
+                        client.remove_targets(Rule=conf['aws-deployed']['bottle']['schedule-expression-rule-name'], Ids=target_ids)
 
-            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
+                client.delete_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
+                client.put_rule(
+                    Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
+                    ScheduleExpression=conf['bottle']['schedule-expression'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
 
-        else:
-            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
-                target_ids = [t['Id'] for t in page['Targets']]
-                if target_ids:
-                    client.remove_targets(Rule=conf['events']['rule-name'], Ids=target_ids)
-
-            client.delete_rule(Name=conf['events']['rule-name'])
-            client.put_rule(
-                Name=conf['events']['rule-name'],
-                ScheduleExpression=conf['events']['rate'],
-                RoleArn=conf['aws-deployed']['iam-role']['Arn'],
-                State='ENABLED')
-            conf['aws-deployed']['events']['schedule-rule'] = client.describe_rule(Name=conf['events']['rule-name'])
-
-            # Remove old targets
-            target = None
-            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['events']['rule-name']):
-                target_ids = [target['Id'] for target in page['Targets']]
-                if len(target_ids) > 0:
-                    client.remove_targets(
-                        Rule=conf['events']['rule-name'],
-                        Ids=target_ids,
-                        Force=True)
+                conf['aws-deployed']['bottle']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
 
             # Add permissions
             lambda_client = boto3.client('lambda')
             lambda_client.add_permission(
                 FunctionName=conf['aws-deploy']['lambda-name'],
-                StatementId=f'{conf["events"]["rule-name"]}-Event',
+                StatementId=f'{conf["aws-deployed"]["bottle"]["schedule-expression-rule-name"]}-Event',
                 Action='lambda:InvokeFunction',
                 Principal='events.amazonaws.com',
-                SourceArn=conf['aws-deployed']['events']['schedule-rule']['Arn'])
+                SourceArn=conf['aws-deployed']['bottle']['schedule-expression-rule']['Arn'])
+
+            # Remove old targets
+            target = None
+            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['bottle']['schedule-expression-rule-name']):
+                target_ids = [target['Id'] for target in page['Targets']]
+                if len(target_ids) > 0:
+                    client.remove_targets(
+                        Rule=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
+                        Ids=target_ids,
+                        Force=True)
 
             if target is None:
                 client.put_targets(
-                    Rule=conf['events']['rule-name'],
+                    Rule=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
                     Targets=[{
                         'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
-                        'Id': conf['events']['target-id'],
+                        'Id': conf['aws-deployed']['bottle']['schedule-expression-target-id'],
                     }])
 
+
+def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('events')
+    for job_name, conf in jobs.items():
+        if conf['spaces']['parent']['noop-space'] is True and conf['events']['schedule-expression']:
+            logger.info(f'Scheduling[{conf["events"]["schedule-expression"]}] Lambda[{job_name}] to Cloudwatch Events')
+            rule_name: str = f'{job_name}-interval'
+            target_id: str = f'{job_name}-target-id'
+            conf['aws-deployed']['events']['schedule-expression-rule-name'] = rule_name
+            conf['aws-deployed']['events']['schedule-expression-target-id'] = target_id
+            # Make Rule
+            try:
+                conf['aws-deployed']['events']['schedule-expression-rule-rule'] = client.describe_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
+
+            except client.exceptions.ResourceNotFoundException:
+                client.put_rule(
+                    Name=conf['aws-deployed']['events']['schedule-expression-rule-name'],
+                    ScheduleExpression=conf['events']['schedule-expression'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
+
+                conf['aws-deployed']['events']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
+
+            else:
+                for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['events']['schedule-expression-rule-name']):
+                    target_ids = [t['Id'] for t in page['Targets']]
+                    if target_ids:
+                        client.remove_targets(Rule=conf['aws-deployed']['events']['schedule-expression-rule-name'], Ids=target_ids)
+
+                client.delete_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
+                client.put_rule(
+                    Name=conf['aws-deployed']['events']['schedule-expression-rule-name'],
+                    ScheduleExpression=conf['events']['schedule-expression'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
+
+                conf['aws-deployed']['events']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
+
+            # Add permissions
+            lambda_client = boto3.client('lambda')
+            lambda_client.add_permission(
+                FunctionName=conf['aws-deploy']['lambda-name'],
+                StatementId=f'{conf["aws-deployed"]["events"]["schedule-expression-rule-name"]}-Event',
+                Action='lambda:InvokeFunction',
+                Principal='events.amazonaws.com',
+                SourceArn=conf['aws-deployed']['events']['schedule-expression-rule']['Arn'])
+
+            # Remove old targets
+            target = None
+            for page in client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['events']['schedule-expression-rule-name']):
+                target_ids = [target['Id'] for target in page['Targets']]
+                if len(target_ids) > 0:
+                    client.remove_targets(
+                        Rule=conf['aws-deployed']['events']['schedule-expression-rule-name'],
+                        Ids=target_ids,
+                        Force=True)
+
+            if target is None:
+                client.put_targets(
+                    Rule=conf['aws-deployed']['events']['schedule-expression-rule-name'],
+                    Targets=[{
+                        'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
+                        'Id': conf['aws-deployed']['events']['schedule-expression-target-id'],
+                    }])
+
+        # if conf['spaces']['parent']['noop-space'] is True and conf['events']['sns-topic-arn']:
 

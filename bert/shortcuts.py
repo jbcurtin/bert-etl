@@ -94,19 +94,38 @@ def merge_requirements(defaults: typing.List[str], requirements: typing.List[str
 
     return [item for item in merged]
 
-def get_if_exists(key: str, default: typing.Any, data_type: typing.Any, defaults: typing.Dict[str, str], env_vars: typing.Dict[str, str]) -> typing.Dict[str, str]:
+def get_if_exists(keypath: str, default: typing.Any, data_type: typing.Any, defaults: typing.Dict[str, str], input_vars: typing.Dict[str, str]) -> typing.Dict[str, str]:
+    steps: typing.List[str] = keypath.split('.')
+    if len(steps) > 1:
+        for key in steps[:-1]:
+            try:
+                if isinstance(input_vars[key], (dict, list)):
+                    input_vars = input_vars[key]
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
+
+            except KeyError:
+                raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
+
+    key: str = steps[-1]
     try:
-        return data_type(env_vars[key])
+        return data_type(input_vars[key])
     except KeyError:
         pass
 
     except ValueError:
-        raise bert_exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
+        raise bert_exceptions.BertConfigError(f'Key[{keypath}] is not DataType[{data_type}]')
 
     try:
-        return data_type(defaults.get(key, default))
+        result: typing.Any = defaults.get(key, default)
+        if result is None:
+            return None
+
+        return data_type(result)
     except ValueError:
-        raise bert_exceptions.BertConfigError(f'Key[{key}] is not DataType[{data_type}]')
+        raise bert_exceptions.BertConfigError(f'Default Key[{keypath}] is not DataType[{data_type}]')
+
 
 def _load_invoke_args_module(member_route: str) -> typing.Dict[str, typing.Any]:
     try:
