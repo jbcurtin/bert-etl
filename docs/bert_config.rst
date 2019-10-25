@@ -88,24 +88,24 @@ deployment
 `deployment` tells `bert-etl` how to and where to deploy the AWS Lambda functions.
 
 
-============== ========================== =============================
-VAR Name       Description                Example
--------------- -------------------------- -----------------------------
-s3_bucket      Which bucket to deploy to? bert-etl-lambda-source-bucket
-============== ========================== =============================
+=================== =============================================================================== =============================
+VAR Name            Description                                                                     Example
+------------------- ------------------------------------------------------------------------------- -----------------------------
+s3_bucket           Which bucket to deploy to? bert-etl-lambda-source-bucket                        bert-etl-lambda-source-code
+=================== =============================================================================== =============================
 
 
 .. code-block:: yaml
 
     deployment:
-        s3_bucket: bert-etl-lambda-source-bucket
+        s3_bucket: bert-etl-lambda-source-code
 
 
 
 every_lambda
 ============
 
-Used to configure every lambda with common settings
+`every_lambda` block in `bert-etl.yaml` will apply settings to every lambda function deployed to AWS Lambda as well as every function ran locally using `bert-runner.py`
 
 
 =================== =============================================================================== =============================
@@ -123,7 +123,7 @@ memory_size         How much memory/cpu shall the lambda utilize?               
 
 .. code-block:: yaml
 
-    init_job_queue:
+    every_lambda:
         batch_size: 150
         batch_size_delay: 3
         runtime: python3.7
@@ -131,6 +131,30 @@ memory_size         How much memory/cpu shall the lambda utilize?               
             DEBUG: false
 
         timeout: 900
+        concurrency_limit: 100
+        memory_size: 512
+
+
+init_job_queue
+==============
+
+`bert-etl` ships with the possibility to specify settings for each function created. Tagging the function with a supported var requires redefination of <function name> in `bert-etl.yaml`. The makeup of the settings is exactly the same as `every_lambda` block. Using the `bert-etl-testing` module, anything defined in `init_job_queue` will override anything defined in `every_lambda`
+
+
+=================== =============================================================================== =============================
+VAR Name            Description                                                                     Example
+------------------- ------------------------------------------------------------------------------- -----------------------------
+concurrency_limit   How many reserved concurrent lamdba executions would you like to allocate?      100
+memory_size         How much memory/cpu shall the lambda utilize?                                   512
+=================== =============================================================================== =============================
+
+
+.. code-block:: yaml
+    every_lambda:
+        concurrency_limit: 50
+        memory_size: 256
+
+    init_job_queue:
         concurrency_limit: 100
         memory_size: 512
 
