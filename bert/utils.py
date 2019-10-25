@@ -117,7 +117,13 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'events':{}}),
             bert_configuration.get(f'{job_name}', {'events': {}}))
 
-        batch_size: int = bert_shortcuts.get_if_exists('batch_size', '250', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
+        batch_size: int = bert_shortcuts.get_if_exists('batch_size', '250', int,
+            bert_configuration.get('every_lambda', {}),
+            bert_configuration.get(job_name, {}))
+        batch_size_delay: int = bert_shortcuts.get_if_exists('batch_size_delay', '3', int,
+            bert_configuration.get('every_lambda', {}),
+            bert_configuration.get(job_name, {}))
+
         timeout: int = bert_shortcuts.get_if_exists('timeout', '900', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         env_vars: typing.Dict[str, str] = bert_shortcuts.merge_env_vars(
             bert_configuration.get('every_lambda', {'environment': {}}).get('environment', {}),
@@ -153,7 +159,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'done-table-name': job.done_key,
                     'environment': env_vars,
                     'batch-size': batch_size,
-                    'batch-window': 3,
+                    'batch-size-delay': batch_size_delay,
                     'concurrency-limit': concurrency_limit,
                     'invoke-args': invoke_args,
                 },

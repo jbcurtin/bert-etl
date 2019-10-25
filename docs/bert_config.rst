@@ -108,15 +108,30 @@ every_lambda
 Used to configure every lambda with common settings
 
 
-runtime
-=+=+=+=
+=================== ======================================================= ======================= =============================
+VAR Name            Description                                                                     Example
+------------------- ------------------------------------------------------------------------------- -----------------------------
+batch_size          How many dynamodb records to process for each lambda?                           150 items
+batch_size_delay    How many seconds to wait for dynamodb records before invocation of next lambda? 3 seconds
+runtime             Which python runtime shall the lambda use?                                      python 3.7
+environment         Which ENVVars would you like to pass to the lambda function?                    DEBUG = false
+timeout             How long is the function allowed to run?                                        15 minutes, or 900 seconds
+concurrency_limit   How many reserved concurrent lamdba executions would you like to allocate?      100
+memory_size         How much memory/cpu shall the lambda utilize?                                   512
+=================== ======================================================= ======================= =============================
 
-maybe an enum of, `python3.6` or `python3.7`. Other runtimes are not yet officially supported
 
+.. code-block:: yaml
 
-batch_size
-=+=+=+=+=+
+    init_job_queue:
+        batch_size: 150
+        batch_size_delay: 3
+        runtime: python3.7
+        environment:
+            DEBUG: false
 
-AWS Lambda memory allocation, with each increase in memory size. There maybe an increase in CPU performance. We recommond 512+ when using `bert-etl` with a concurrent configuration. We've found Dynamodb Streams don't always execute 128mb functions
+        timeout: 900
+        concurrency_limit: 100
+        memory_size: 512
 
 
