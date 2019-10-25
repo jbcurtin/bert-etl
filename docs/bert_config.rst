@@ -150,6 +150,7 @@ memory_size         How much memory/cpu shall the lambda utilize?               
 
 
 .. code-block:: yaml
+
     every_lambda:
         concurrency_limit: 50
         memory_size: 256
