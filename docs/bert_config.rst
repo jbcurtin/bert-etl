@@ -88,10 +88,10 @@ deployment
 `deployment` tells `bert-etl` how to and where to deploy the AWS Lambda functions.
 
 
-==============  ==========================  =============================
-VAR Name        Description                 Example
---------------  --------------------------  -----------------------------
-s3_bucket       Which bucket to deploy to?  bert-etl-lambda-source-bucket
+============== ========================== =============================
+VAR Name       Description                Example
+-------------- -------------------------- -----------------------------
+s3_bucket      Which bucket to deploy to? bert-etl-lambda-source-bucket
 
 
 .. code-block:: yaml
