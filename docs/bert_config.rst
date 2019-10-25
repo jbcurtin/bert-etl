@@ -108,7 +108,7 @@ every_lambda
 Used to configure every lambda with common settings
 
 
-=================== ======================================================= ======================= =============================
+=================== =============================================================================== =============================
 VAR Name            Description                                                                     Example
 ------------------- ------------------------------------------------------------------------------- -----------------------------
 batch_size          How many dynamodb records to process for each lambda?                           150 items
@@ -118,7 +118,7 @@ environment         Which ENVVars would you like to pass to the lambda function?
 timeout             How long is the function allowed to run?                                        15 minutes, or 900 seconds
 concurrency_limit   How many reserved concurrent lamdba executions would you like to allocate?      100
 memory_size         How much memory/cpu shall the lambda utilize?                                   512
-=================== ======================================================= ======================= =============================
+=================== =============================================================================== =============================
 
 
 .. code-block:: yaml
