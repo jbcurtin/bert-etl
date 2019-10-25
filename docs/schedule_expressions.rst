@@ -1,6 +1,6 @@
-##################
-AWS Lambda Testing
-##################
+#####################
+Scheduling Expression
+#####################
 
 `bert-etl` supports AWS Lambda Schedule expressions. Inside `bert-etl.yaml`, add the `events.schedule_expression` with `rate(1 minute)` or `cron(10 15 * * ? *)` to scheduling periodic invocation the `bert-etl` pipeline init function. Here is an example,
 
