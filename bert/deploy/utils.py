@@ -166,17 +166,25 @@ bert_encoders.load_queue_decoders(%(queue_decoders)s)
 
 def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
     with bert_reporting.track_execution(%(job_name)s):
+        print(event)
         records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
         bert_inputs: typing.Dict[str, typing.Any] = event.get('bert-inputs', None)
         if len(records) > 0 and bert_constants.DEBUG == False:
             bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
             work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
             for record in records:
-                if record['eventName'].lower() == 'INSERT'.lower():
-                    work_queue.local_put(record['dynamodb']['NewImage'])
+                if record.get('EventSource', None) == 'aws:sns':
+                    work_queue.local_put({'identity': {'S': 'sns-entry'}, 'datum': {'M': bert_encoders.encode_object(record['Sns'])}})
+
+                elif record.get('eventSource', None) == 'aws:dynamodb':
+                    if record['eventName'].lower() == 'INSERT'.lower():
+                        work_queue.local_put(record['dynamodb']['NewImage'])
+
+                else:
+                    raise NotImplementedError(record['EventSource'])
 
         elif bert_inputs != None:
-            bert_constants.QueueType = bert_constants.QueueTypes.StreamSpecification
+            bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
             work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
             for record in bert_inputs:
                 work_queue.local_put(record)
@@ -665,6 +673,23 @@ def destroy_lambda_concurrency(jobs: typing.Dict[str, typing.Any]) -> None:
         except client.exceptions.ResourceNotFoundException:
             pass
 
+def destroy_sns_topic_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
+    lambda_client = boto3.client('lambda')
+    sns_client = boto3.client('sns')
+    for job_name, conf in jobs.items():
+        if conf['spaces']['parent']['noop-space'] is True:
+            try:
+                conf['aws-deployed']['aws-lambda'] = lambda_client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
+            except lambda_client.exceptions.ResourceNotFoundException:
+                continue
+
+            else:
+                for page in sns_client.get_paginator('list_subscriptions').paginate():
+                    for subscription in page['Subscriptions']:
+                        if subscription['Endpoint']  == conf['aws-deployed']['aws-lambda']['FunctionArn']:
+                            sns_client.unsubscribe(SubscriptionArn=subscription['SubscriptionArn'])
+
+
 def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
     client = boto3.client('lambda')
     for job_name, conf in jobs.items():
@@ -775,7 +800,7 @@ def bind_lambdas_to_tables(jobs: typing.Dict[str, typing.Any]) -> None:
             EventSourceArn=parent_stream_arn,
             FunctionName=conf['aws-deploy']['lambda-name'],
             BatchSize=conf['aws-deploy']['batch-size'],
-            MaximumBatchingWindowInSeconds=conf['aws-deploy']['batch-window'],
+            MaximumBatchingWindowInSeconds=conf['aws-deploy']['batch-size-delay'],
             Enabled=True,
             StartingPosition='LATEST')
 
@@ -910,5 +935,76 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                         'Id': conf['aws-deployed']['events']['schedule-expression-target-id'],
                     }])
 
-        # if conf['spaces']['parent']['noop-space'] is True and conf['events']['sns-topic-arn']:
+        if conf['spaces']['parent']['noop-space'] is True and conf['events']['sns-topic-arn']:
+            logger.info(f'Attaching Job[{job_name}] to SNS Topic[{conf["events"]["sns-topic-arn"]}]')
+            sns_client = boto3.client('sns')
+            events_client = boto3.client('events')
+            lambda_client = boto3.client('lambda')
+
+            for page in sns_client.get_paginator('list_subscriptions_by_topic').paginate(TopicArn=conf['events']['sns-topic-arn']):
+                for subscription in page['Subscriptions']:
+                    import ipdb; ipdb.set_trace()
+                    pass
+
+            conf['aws-deployed']['events']['sns-topic'] = sns_client.subscribe(
+                TopicArn=conf['events']['sns-topic-arn'],
+                Protocol='lambda',
+                Endpoint=conf['aws-deployed']['aws-lambda']['FunctionArn'])
+
+            lambda_client.add_permission(
+                FunctionName=conf['aws-deploy']['lambda-name'],
+                StatementId=f'{job_name}-sns-event',
+                Action='lambda:InvokeFunction',
+                Principal='sns.amazonaws.com',
+                SourceArn=conf['events']['sns-topic-arn'])
+
+            conf['aws-deployed']['events']['sns-rule-name'] = f'{job_name}-sns-rule'
+            conf['aws-deployed']['events']['sns-target-id'] = f'{job_name}-sns-target'
+            conf['aws-deployed']['events']['sns-event-pattern'] = json.dumps({
+                'EventSource': ['aws.bert-etl-sns-topic'],
+                'EventSourceArn': [conf['events']['sns-topic-arn']],
+            })
+
+            try:
+                conf['aws-deployed']['events']['sns-rule'] = events_client.describe_rule(Name=conf['aws-deployed']['events']['sns-rule-name'])
+            except events_client.exceptions.ResourceNotFoundException:
+                events_client.put_rule(
+                    Name=conf['aws-deployed']['events']['sns-rule-name'],
+                    EventPattern=conf['aws-deployed']['events']['sns-event-pattern'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
+
+            else:
+                for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['events']['sns-rule-name']):
+                    target_ids = [target['Id'] for target in page['Targets']]
+                    if len(target_ids) > 0:
+                        events_client.remove_targets(
+                            Rule=conf['aws-deployed']['events']['sns-rule-name'],
+                            Ids=target_ids,
+                            Force=True)
+
+                events_client.delete_rule(Name=conf['aws-deployed']['events']['sns-rule-name'])
+                events_client.put_rule(
+                    Name=conf['aws-deployed']['events']['sns-rule-name'],
+                    EventPattern=conf['aws-deployed']['events']['sns-event-pattern'],
+                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    State='ENABLED')
+
+            for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['events']['sns-rule-name']):
+                target_ids = [target['Id'] for target in page['Targets']]
+                if len(target_ids) > 0:
+                    events_client.remove_targets(
+                        Rule=conf['aws-deployed']['events']['sns-rule-name'],
+                        Ids=target_ids,
+                        Force=True)
+
+            events_client.put_targets(
+                Rule=conf['aws-deployed']['events']['sns-rule-name'],
+                Targets=[{
+                    # 'Arn': conf['aws-deployed']['aws-lambda']['FunctionArn'],
+                    'Arn': conf['events']['sns-topic-arn'],
+                    'Id': conf['aws-deployed']['events']['sns-target-id'],
+                }])
+
+        # if conf['spaces']['parent']['noop-space'] is True and conf['events']['s3']:
 

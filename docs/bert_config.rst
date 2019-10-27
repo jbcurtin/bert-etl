@@ -145,7 +145,7 @@ init_job_queue
 VAR Name            Description                                                                     Example
 ------------------- ------------------------------------------------------------------------------- -----------------------------
 concurrency_limit   How many reserved concurrent lamdba executions would you like to allocate?      100
-memory_size         How much memory/cpu shall the lambda utilize?                                   512
+memory_size         How much memory/cpu should the lambda utilize?                                  512
 =================== =============================================================================== =============================
 
 

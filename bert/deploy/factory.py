@@ -16,7 +16,7 @@ import types
 
 from datetime import datetime
 
-from bert import utils as bert_utils
+from bert import utils as bert_utils, constants as bert_constants
 from bert.deploy import utils as bert_deploy_utils
 
 logger = logging.getLogger(__name__)
@@ -54,10 +54,10 @@ def deploy_service(options) -> None:
                 logger.info(f'Invoking Job[{job_name}] with {len(invoke_args)} payloads.')
                 if options.invoke_async:
                     for args in invoke_args:
-                        payload: bytes = json.dumps({'bert-inputs': [args]}).encode(constants.ENCODING)
+                        payload: bytes = json.dumps({'bert-inputs': [args]}).encode(bert_constants.ENCODING)
                         client.invoke(FunctionName=job_name, InvocationType='Event', Payload=payload)
                 else:
-                    payload: bytes = json.dumps({'bert-inputs': invoke_args}).encode(constants.ENCODING)
+                    payload: bytes = json.dumps({'bert-inputs': invoke_args}).encode(bert_constants.ENCODING)
                     client.invoke(FunctionName=job_name, InvocationType='Event', Payload=payload)
 
             import sys; sys.exit(0)
@@ -70,6 +70,7 @@ def deploy_service(options) -> None:
         bert_deploy_utils.scan_dynamodb_tables(jobs)
         bert_deploy_utils.destroy_lambda_to_table_bindings(jobs)
         bert_deploy_utils.destroy_lambda_concurrency(jobs)
+        bert_deploy_utils.destroy_sns_topic_lambdas(jobs)
         bert_deploy_utils.destroy_lambdas(jobs)
         bert_deploy_utils.create_lambdas(jobs)
         bert_deploy_utils.create_lambda_concurrency(jobs)

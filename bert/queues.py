@@ -100,6 +100,9 @@ class StreamingQueue(DynamodbQueue):
             unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
             client = boto3.client('dynamodb')
             local_timeout: datetime = datetime.utcnow() + timedelta(seconds=DELAY)
+            if value['identity']['S'] == 'sns-entry':
+                return unpacked
+
             while local_timeout > datetime.utcnow():
                 try:
                     client.delete_item(

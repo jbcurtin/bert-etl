@@ -104,12 +104,12 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         if int(memory_size / 64) != memory_size / 64:
             raise bert_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
 
-        # # events
-        # # sns topic to proc lambda
-        # sns_topic_arn: str = bert_shortcuts.get_if_exists(
-        #     'events.sns_topic_arn', None, str,
-        #     bert_configuration.get('every_lambda', {'events':{}}),
-        #     bert_configuration.get(f'{job_name}', {'events': {}}))
+        # events
+        # sns topic to proc lambda
+        sns_topic_arn: str = bert_shortcuts.get_if_exists(
+            'events.sns_topic_arn', None, str,
+            bert_configuration.get('every_lambda', {'events':{}}),
+            bert_configuration.get(f'{job_name}', {'events': {}}))
 
         # schedule_expression will be validated before executing the deploy script
         schedule_expression: str = bert_shortcuts.get_if_exists(
@@ -175,7 +175,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                 },
                 'events': {
                     'schedule-expression': schedule_expression,
-                    # 'sns-topic-arn': sns_topic_arn,
+                    'sns-topic-arn': sns_topic_arn,
                     # "cron(0 20 * * ? *)" or "rate(5 minutes)"
                     # 'rate': 'rate(5 minutes)',
                 },
