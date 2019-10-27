@@ -1,7 +1,15 @@
 [![Documentation Status](https://readthedocs.org/projects/bert-etl/badge/?version=latest)](https://bert-etl.readthedocs.io/en/latest/?badge=latest)
 
 # Bert
-A microframework for simple ETL solutions
+A microframework for simple ETL solutions.
+
+
+## Architecture
+
+At its core, `bert-etl` uses Dynamodb Streams to communicate between lambda functions. `bert-etl.yaml` provides control on how the initial lambda function is called, either by periodic events, sns topics, or s3 bucket (planned)events. Passing an event to `bert-etl` is straight forward from `zappa` or a generic AWS lambda function you've hooked up to API Gateway.
+
+At this moment in time, there are no plans to attach API Gateway to `bert-etl.yaml` because there is already great software(like `zappa`) that does this.
+
 
 ## Begin with
 

@@ -77,5 +77,5 @@ Be careful though, wikipedia will ratelimit you. It works better with S3 or othe
     queue_encoders__and__queue_decoders
     bert_config
     schedule_expressions
-
+    sns_topics
 
