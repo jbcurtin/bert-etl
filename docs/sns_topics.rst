@@ -27,5 +27,5 @@ With the `sns_topic_arn` created in `bert-etl.yaml`, we're ready to deploy
 
 .. code-block:: bash
 
-    bert-deploy.py -m bert_testing_jobs
+    bert-deploy.py -m bert_test_sns
 
