@@ -172,7 +172,7 @@ Great, with all these steps above. Lets start working in `bert-etl` again. Let's
     $ cd bert-etl-cf-disable
 
 
-Inside the directory `bert-etl-cf-disable`, open `bert-etl.yaml` in your editor and insert the following lines in `init_job_queue`
+Inside the directory `bert-etl-cf-disable`, open `bert-etl.yaml` in your editor and insert the following lines in `test_cf_disable`
 
 
 .. code-block:: yaml
@@ -190,10 +190,10 @@ Lets test this function locally with
     
     
     
-Chances are it'll fail because you've yet to create a Cloudfront distribution. Unfortuantly, that is beyond the scope of this walkthrough. You'll have to just trust the code works. :)
+Chances are it'll fail because we've yet to create a Cloudfront distribution. Go ahead and create it, then edit the `jobs.py` file with the correct Domain Name
 
 
-Go ahead and deploy to AWS Lambda
+When satisfied with the resultes, go ahead and deploy to AWS Lambda
 
 .. code-block:: bash
 
