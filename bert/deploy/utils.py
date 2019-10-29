@@ -944,11 +944,6 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
             events_client = boto3.client('events')
             lambda_client = boto3.client('lambda')
 
-            for page in sns_client.get_paginator('list_subscriptions_by_topic').paginate(TopicArn=conf['events']['sns-topic-arn']):
-                for subscription in page['Subscriptions']:
-                    import ipdb; ipdb.set_trace()
-                    pass
-
             conf['aws-deployed']['events']['sns-topic'] = sns_client.subscribe(
                 TopicArn=conf['events']['sns-topic-arn'],
                 Protocol='lambda',
