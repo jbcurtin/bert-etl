@@ -78,4 +78,6 @@ Be careful though, wikipedia will ratelimit you. It works better with S3 or othe
     bert_config
     schedule_expressions
     sns_topics
+    assume_role
+
 
