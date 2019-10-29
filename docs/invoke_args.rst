@@ -32,6 +32,13 @@ With `invoke_args` defined in `bert-etl.yaml`, we're ready to test our function
 
 .. code-block:: bash
 
+    bert-runner.py -m bert_testing_jobs
+
+
+Or test on AWS Lambda with
+
+.. code-block:: bash
+
     bert-deploy.py -m bert_testing_jobs -i
 
 
