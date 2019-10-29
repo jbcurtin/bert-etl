@@ -166,21 +166,29 @@ def load_invoke_args(invoke_args: typing.List[str]) -> typing.List[typing.Dict[s
 
         else:
             try:
-                loaded.append(_load_invoke_args_module(invoke_item))
+                loaded.extend(_load_invoke_args_module(invoke_item))
             except ImportError:
                 pass
             else:
                 continue
 
             try:
-                loaded.append(json.loads(invoke_item))
+                datum = json.loads(invoke_item)
+                if isinstance(datum, list):
+                    loaded.extend(datum)
+
+                elif isinstance(datum, dict):
+                    loaded.append(datum)
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid Json Type. Only List, Dict are supported.')
             except JSONDecodeError:
                 pass
 
             else:
                 continue
 
-            raise NotImplementedError
+            raise bert_exceptions.BertConfigError(f'Unable to load invoke_arg[{invoke_item}]')
 
     return loaded
 

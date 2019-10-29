@@ -30,6 +30,10 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
             logger.info(f'Running Job[{job_name}] as [{conf["spaces"]["pipeline-type"]}]')
             execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
+            job_worker_queue, job_done_queue, job_logger = bert_utils.comm_binders(conf['job'])
+            for invoke_arg in conf['aws-deploy']['invoke-args']:
+                job_worker_queue.put(invoke_arg)
+
             if execution_role_arn is None:
                 with bert_datasource.ENVVars(conf['runner']['environment']):
                     conf['job']()
@@ -44,6 +48,9 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             logger.info(f'Running Job[{conf["job"].func_space}] as [{conf["job"].pipeline_type.value}] for [{conf["job"].__name__}]')
             logger.info(f'Job worker count[{conf["job"].workers}]')
             processes: typing.List[multiprocessing.Process] = []
+            job_worker_queue, job_done_queue, job_logger = bert_utils.comm_binders(conf['job'])
+            for invoke_arg in conf['aws-deploy']['invoke-args']:
+                job_worker_queue.put(invoke_arg)
 
             @functools.wraps(conf['job'])
             def _job_runner(*args, **kwargs) -> None:

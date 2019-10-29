@@ -89,7 +89,6 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'invoke_args': []}).get('invoke_args', []),
             bert_configuration.get(job_name,        {'invoke_args': []}).get('invoke_args', []),
             [])
-
         invoke_args: typing.List[typing.Dict[str, typing.Any]] = bert_shortcuts.load_invoke_args(invoke_args)
 
         # Make sure the encoders exist
