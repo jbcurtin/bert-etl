@@ -48,6 +48,11 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             logger.info(f'Running Job[{conf["job"].func_space}] as [{conf["job"].pipeline_type.value}] for [{conf["job"].__name__}]')
             logger.info(f'Job worker count[{conf["job"].workers}]')
             processes: typing.List[multiprocessing.Process] = []
+            bert_encoders.clear_encoding()
+            bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
+            bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
+            bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
+
             job_worker_queue, job_done_queue, job_logger = bert_utils.comm_binders(conf['job'])
             for invoke_arg in conf['aws-deploy']['invoke-args']:
                 job_worker_queue.put(invoke_arg)
