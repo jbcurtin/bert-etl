@@ -639,6 +639,9 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
         iam_client.attach_role_policy(RoleName=trust_policy_name, PolicyArn=policy['Arn'])
 
     for job_name, conf in jobs.items():
+        conf['aws-deployed']['iam']['execution-role'] = bert_deploy_shortcuts.map_iam_role_by_arn(conf['iam']['execution-role-arn'])
+        conf['aws-deployed']['iam']['bert-role'] = role
+        conf['aws-deployed']['iam']['bert-policy'] = policy
         conf['aws-deployed']['iam-role'] = role
         conf['aws-deployed']['iam-policy'] = policy
 
@@ -752,7 +755,7 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 FunctionName=conf['aws-deploy']['lambda-name'],
                 Runtime=conf['aws-deploy']['runtime'],
                 MemorySize=conf['aws-deploy']['memory-size'],
-                Role=conf['aws-deployed']['iam-role']['Arn'],
+                Role=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                 Handler=conf['aws-deploy']['handler'],
                 Code=code_config,
                 Timeout=conf['aws-deploy']['timeout'],
@@ -766,7 +769,7 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 FunctionName=conf['aws-deploy']['lambda-name'],
                 Runtime=conf['aws-deploy']['runtime'],
                 MemorySize=conf['aws-deploy']['memory-size'],
-                Role=conf['aws-deploy']['iam-role']['Arn'],
+                Role=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                 Handler=conf['aws-deploy']['handler'],
                 Code=code_config,
                 Timeout=conf['aws-deploy']['timeout'],
@@ -823,7 +826,7 @@ def bind_events_for_bottle_functions(jobs: typing.Dict[str, typing.Any]) -> None
                 client.put_rule(
                     Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
                     ScheduleExpression=conf['bottle']['schedule-expression'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
                 conf['aws-deployed']['bottle']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
@@ -838,7 +841,7 @@ def bind_events_for_bottle_functions(jobs: typing.Dict[str, typing.Any]) -> None
                 client.put_rule(
                     Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'],
                     ScheduleExpression=conf['bottle']['schedule-expression'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
                 conf['aws-deployed']['bottle']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['bottle']['schedule-expression-rule-name'])
@@ -888,7 +891,7 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                 client.put_rule(
                     Name=conf['aws-deployed']['events']['schedule-expression-rule-name'],
                     ScheduleExpression=conf['events']['schedule-expression'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
                 conf['aws-deployed']['events']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
@@ -903,7 +906,7 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                 client.put_rule(
                     Name=conf['aws-deployed']['events']['schedule-expression-rule-name'],
                     ScheduleExpression=conf['events']['schedule-expression'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
                 conf['aws-deployed']['events']['schedule-expression-rule'] = client.describe_rule(Name=conf['aws-deployed']['events']['schedule-expression-rule-name'])
@@ -971,7 +974,7 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                 events_client.put_rule(
                     Name=conf['aws-deployed']['events']['sns-rule-name'],
                     EventPattern=conf['aws-deployed']['events']['sns-event-pattern'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
             else:
@@ -987,7 +990,7 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                 events_client.put_rule(
                     Name=conf['aws-deployed']['events']['sns-rule-name'],
                     EventPattern=conf['aws-deployed']['events']['sns-event-pattern'],
-                    RoleArn=conf['aws-deployed']['iam-role']['Arn'],
+                    RoleArn=conf['aws-deployed']['iam']['execution-role']['Arn'] or conf['aws-deployed']['iam']['role']['Arn'],
                     State='ENABLED')
 
             for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=conf['aws-deployed']['events']['sns-rule-name']):

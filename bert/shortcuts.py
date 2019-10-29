@@ -106,7 +106,8 @@ def get_if_exists(keypath: str, default: typing.Any, data_type: typing.Any, defa
                     raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
 
             except KeyError:
-                raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
+                pass
+                # raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
 
     key: str = steps[-1]
     try:

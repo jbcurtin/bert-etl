@@ -12,7 +12,8 @@ from bert import \
     utils as bert_utils, \
     constants as bert_constants, \
     encoders as bert_encoders, \
-    datasource as bert_datasource
+    datasource as bert_datasource, \
+    aws as bert_aws
 
 from bert.runner import \
     constants as runner_constants
@@ -28,8 +29,15 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
             bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
             logger.info(f'Running Job[{job_name}] as [{conf["spaces"]["pipeline-type"]}]')
-            with bert_datasource.ENVVars(conf['runner']['environment']):
-                conf['job']()
+            execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
+            if execution_role_arn is None:
+                with bert_datasource.ENVVars(conf['runner']['environment']):
+                    conf['job']()
+
+            else:
+                with bert_aws.assume_role(execution_role_arn):
+                    with bert_datasource.ENVVars(conf['runner']['environment']):
+                        conf['job']()
 
     else:
         for job_name, conf in jobs.items():
@@ -43,12 +51,20 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
                 bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
                 bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
                 bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
+                execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
                 job_restart_count: int = 0
                 while job_restart_count < conf['runner']['max-retries']:
                     try:
 
-                        with bert_datasource.ENVVars(conf['runner']['environment']):
-                            conf['job']()
+                        if execution_role_arn is None:
+                            with bert_datasource.ENVVars(conf['runner']['environment']):
+                                conf['job']()
+
+                        else:
+                            with bert_aws.assume_role(execution_role_arn):
+                                with bert_datasource.ENVVars(conf['runner']['environment']):
+                                    conf['job']()
+
                     except Exception as err:
                         if LOG_ERROR_ONLY:
                             logger.exception(err)

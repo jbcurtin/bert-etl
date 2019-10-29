@@ -104,12 +104,18 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         if int(memory_size / 64) != memory_size / 64:
             raise bert_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
 
+        # iam
+        iam_execution_role_arn: str = bert_shortcuts.get_if_exists(
+            'iam.execution_role_arn', None, str,
+            bert_configuration.get('every_lambda', {'iam':{}}),
+            bert_configuration.get(job_name, {'iam': {}}))
+
         # events
         # sns topic to proc lambda
         sns_topic_arn: str = bert_shortcuts.get_if_exists(
             'events.sns_topic_arn', None, str,
             bert_configuration.get('every_lambda', {'events':{}}),
-            bert_configuration.get(f'{job_name}', {'events': {}}))
+            bert_configuration.get(job_name, {'events': {}}))
 
         # schedule_expression will be validated before executing the deploy script
         schedule_expression: str = bert_shortcuts.get_if_exists(
@@ -147,6 +153,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                 'aws-deployed': {
                     'events': {},
                     'bottle': {},
+                    'iam': {},
                 },
                 'aws-deploy': {
                     'timeout': timeout,
@@ -172,6 +179,9 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                 'runner': {
                     'environment': env_vars,
                     'max-retries': 10,
+                },
+                'iam': {
+                    'execution-role-arn': iam_execution_role_arn,
                 },
                 'events': {
                     'schedule-expression': schedule_expression,
