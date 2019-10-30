@@ -1,5 +1,6 @@
 import collections
 import getpass
+import json
 import os
 import redis
 import typing
@@ -19,7 +20,11 @@ class ENVVars:
     def __enter__(self: PWN) -> PWN:
         for key, value in self._env_vars.items():
             self._old_values[key] = os.environ.get(key, None)
-            os.environ[key] = value
+            if isinstance(value, (dict, list)):
+                os.environ[key] = json.dumps(value)
+
+            else:
+                os.environ[key] = value
 
         return self
 

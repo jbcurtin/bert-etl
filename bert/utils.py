@@ -109,6 +109,18 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'iam':{}}),
             bert_configuration.get(job_name, {'iam': {}}))
 
+        # kms
+        kms_alias: str = bert_shortcuts.get_if_exists(
+            'kms.alias', None, str,
+            bert_configuration.get('every_lambda', {'kms': {}}),
+            bert_configuration.get(job_name, {'kms': {}}))
+
+        kms_usernames: typing.List[str] = bert_shortcuts.get_and_merge_if_exists(
+            'kms.usernames', None, list,
+            bert_configuration.get('every_lambda', {'kms': {}}),
+            bert_configuration.get(job_name, {'kms': {}}))
+
+        invoke_args: typing.List[typing.Dict[str, typing.Any]] = bert_shortcuts.load_invoke_args(invoke_args)
         # events
         # sns topic to proc lambda
         sns_topic_arn: str = bert_shortcuts.get_if_exists(
@@ -153,6 +165,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     'events': {},
                     'bottle': {},
                     'iam': {},
+                    'kms': {},
                 },
                 'aws-deploy': {
                     'timeout': timeout,
@@ -181,6 +194,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                 },
                 'iam': {
                     'execution-role-arn': iam_execution_role_arn,
+                },
+                'kms': {
+                    'alias': kms_alias,
+                    'usernames': kms_usernames,
                 },
                 'events': {
                     'schedule-expression': schedule_expression,

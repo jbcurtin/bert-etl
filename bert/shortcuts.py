@@ -28,12 +28,30 @@ def head_bucket_for_existance(bucket_name: str) -> None:
         if '(403)' in err.args[0]:
             raise bert_exceptions.AWSError(f'Bucket[{bucket_name}] name is taken by someone else')
 
+def obtain_secrets_config(bert_configuration: typing.Any) -> collections.namedtuple:
+    defaults = {
+        'key_alias': 'bert-etl',
+        'usernames': [],
+    }
+    items = bert_configuration.get('secrets', {})
+    for key, value in defaults.items():
+        if not key in items.keys():
+            items[key] = value
+
+    keys = [key for key in items.keys()]
+    values = []
+    secrets_tuple = collections.namedtuple('Secrets', keys)
+    for key in keys:
+        values.append(items[key])
+
+    return secrets_tuple(*values)
+
 def obtain_deployment_config(bert_configuration: typing.Any) -> collections.namedtuple:
     """
     Written verbosely to allow for default_keys
     """
     defaults = {
-        's3_bucket': None
+        's3_bucket': None,
     }
     items = bert_configuration.get('deployment', {})
     for key, value in defaults.items():
@@ -48,6 +66,12 @@ def obtain_deployment_config(bert_configuration: typing.Any) -> collections.name
 
     return deployment_tuple(*values)
 
+def save_configuration(configuration: typing.Dict[str, typing.Any]) -> None:
+    conf_path: str = os.path.join(os.getcwd(), 'bert-etl.yaml')
+    logger.info(f'Writing configuration to path[{conf_path}]')
+    with open(conf_path, 'w', encoding='utf-8') as stream:
+        stream.write(yaml.dump(configuration, indent=4, canonical=False))
+
 def load_configuration() -> typing.Dict[str, typing.Any]:
     conf_path: str = os.path.join(os.getcwd(), 'bert-etl.yaml')
     if not os.path.exists(conf_path):
@@ -56,6 +80,36 @@ def load_configuration() -> typing.Dict[str, typing.Any]:
 
     with open(conf_path, 'r', encoding='utf-8') as stream:
         return yaml.load(stream.read(), Loader=yaml.FullLoader)
+
+def get_and_merge_if_exists(keypath: str, default: typing.Any, object_type: typing.Any, defaults: typing.List[typing.Any], primary: typing.List[str]) -> typing.List[str]:
+    steps: typing.List[str] = keypath.split('.')
+    if len(steps) > 1:
+        for key in steps[:-1]:
+            try:
+                if isinstance(defaults[key], (dict, list)):
+                    defaults = defaults[key]
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid KeyPath for Defaults: keypath[{keypath}], key[{key}]')
+
+            except KeyError:
+                pass
+
+            try:
+                if isinstance(primary[key], (dict, list)):
+                    primary = primary[key]
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid KeyPath for Primary: keypath[{keypath}], key[{key}]')
+
+            except KeyError:
+                pass
+                # raise bert_exceptions.BertConfigError(f'Invalid KeyPath: keypath[{keypath}], key[{key}]')
+
+    values: typing.List[str] = defaults.get(steps[-1], [])
+    values.extend(primary.get(steps[-1], []))
+    return values
+
 
 def merge_lists(main: typing.List[typing.Any], secondary: typing.List[typing.Any], defaults: typing.List[typing.Any]) -> typing.List[typing.Any]:
     if len(main) == 0 and len(secondary) == 0:
@@ -191,4 +245,38 @@ def load_invoke_args(invoke_args: typing.List[str]) -> typing.List[typing.Dict[s
             raise bert_exceptions.BertConfigError(f'Unable to load invoke_arg[{invoke_item}]')
 
     return loaded
+
+def load_if_exists(keypath: str, configuration: typing.Dict[str, typing.Any]) -> typing.Any:
+    steps = keypath.split('.')
+    if len(steps) > 1:
+        for key in steps[:-1]:
+            try:
+                if isinstance(configuration[key], (list, dict)):
+                    configuration= configuration[key]
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid Keypath: keypath[{keypath}]')
+            except KeyError:
+                pass
+
+    try:
+        return configuration[steps[-1]]
+    except (KeyError, IndexError) as err:
+        raise bert_exceptions.BertConfigError(f'Invalid Keypath: keypath[{keypath}]')
+
+def write_keypath_value(keypath: str, configuration: typing.Dict[str, typing.Any], value: typing.Any) -> None:
+    steps = keypath.split('.')
+    if len(steps) > 1:
+        for key in steps[:-1]:
+            try:
+                if isinstance(configuration[key], (list, dict)):
+                    configuration = configuration[key]
+
+                else:
+                    raise bert_exceptions.BertConfigError(f'Invalid Keypath: keypath[{keypath}]')
+
+            except KeyError:
+                pass
+
+    configuration[steps[-1]] = value
 

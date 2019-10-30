@@ -187,7 +187,10 @@ def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lam
             bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
             work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
             for record in bert_inputs:
-                work_queue.local_put(record)
+                work_queue.local_put({
+                    'identity': {'S': 'invoke-arg'},
+                    'datum': {'M': bert_encoders.encode_object(record)},
+                })
 
         elif bert_constants.DEBUG:
             bert_constants.QueueType = bert_constants.QueueTypes.LocalQueue
