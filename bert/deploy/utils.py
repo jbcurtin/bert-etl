@@ -166,7 +166,6 @@ bert_encoders.load_queue_decoders(%(queue_decoders)s)
 
 def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
     with bert_reporting.track_execution(%(job_name)s):
-        print(event)
         records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
         bert_inputs: typing.Dict[str, typing.Any] = event.get('bert-inputs', None)
         if len(records) > 0 and bert_constants.DEBUG == False:

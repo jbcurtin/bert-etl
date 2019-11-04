@@ -91,35 +91,30 @@ class StreamingQueue(DynamodbQueue):
         self._queue.append(copy.deepcopy(record))
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
-        try:
-            value: typing.Any = self._queue.pop(0)
-        except IndexError:
-            return None
+        while True:
+            try:
+                value: typing.Any = self._queue.pop(0)
+            except IndexError:
+                return super(StreamingQueue, self).get()
 
-        else:
-            unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
-            client = boto3.client('dynamodb')
-            local_timeout: datetime = datetime.utcnow() + timedelta(seconds=DELAY)
-            if value['identity']['S'] in ['sns-entry', 'invoke-arg']:
-                return unpacked
+            else:
+                unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
+                client = boto3.client('dynamodb')
+                local_timeout: datetime = datetime.utcnow() + timedelta(seconds=DELAY)
+                if value['identity']['S'] in ['sns-entry', 'invoke-arg']:
+                    return unpacked
 
-            while local_timeout > datetime.utcnow():
                 try:
                     client.delete_item(
                         TableName=self._key,
                         Key={'identity': value['identity']},
                         Expected={'identity': {'Exists': True, 'Value': value['identity']}})
                 except client.exceptions.ConditionalCheckFailedException:
-                    time.sleep(.1)
+                    # time.sleep(.1)
                     continue
 
                 else:
-                    break
-            else:
-                raise NotImplementedError(f'Unable to delete[{value["identity"]["S"]}] from table[{self._key}]')
-
-            # Confirm Delete
-            return unpacked
+                    return unpacked
 
 class LocalQueue(DynamodbQueue):
     """

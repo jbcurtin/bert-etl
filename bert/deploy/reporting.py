@@ -1,6 +1,7 @@
 import boto3
 import json
 import logging
+import time
 import types
 import typing
 import uuid
@@ -22,7 +23,7 @@ class track_execution():
     def __enter__(self: PWN) -> PWN:
         value = {
             'identity': {'S': self._identity},
-            'job': {'S': self._job.__name__},
+            'job_name': {'S': self._job.__name__},
         }
         self._client.put_item(TableName=TABLE_NAME, Item=value)
         return self
@@ -70,12 +71,12 @@ class manager():
                 ScanFilter=scan_filter, ConsistentRead=True)['Items']
 
             if len(items) == 0:
-                logger.info('Parent Is Running False')
+                logger.info(f'Parent[] Is Running: False')
                 return False
 
             time.sleep(.1)
 
-        logger.info('Parent Is Running True')
+        logger.info(f'Parent[] Is Running: True')
         return True
 
     def _is_running_already(self: PWN) -> bool:
@@ -91,11 +92,11 @@ class manager():
                 ScanFilter=scan_filter, ConsistentRead=True)['Items']
 
             if len(items) == 0:
-                logger.info('IsRunning False')
+                logger.info(f'Self[{self._job.__name__}] IsRunning: False')
                 return False
 
             time.sleep(.1)
 
-        logger.info('IsRunning True')
+        logger.info(f'Self[{self._job.__name__}] IsRunning: True')
         return True
 
