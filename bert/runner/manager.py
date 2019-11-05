@@ -24,6 +24,10 @@ STOP_DAEMON: bool = False
 def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
         for job_name, conf in jobs.items():
+            if not options.function_name is None and options.function_name != job_name:
+                logger.info(f'Skipping job[{job_name}]')
+                continue
+
             bert_encoders.clear_encoding()
             bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
             bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
