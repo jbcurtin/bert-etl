@@ -13,6 +13,9 @@ class IdentityEncoder(json.JSONEncoder):
         if isinstance(obj, datetime):
             return obj.strftime(constants.DATETIME_FORMAT)
 
+        elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
+            return super(IdentityEncoder, self).default(datum._payload)
+
         return super(IdentityEncoder, self).default(obj)
 
 def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
@@ -33,6 +36,9 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
 
     elif isinstance(datum, float):
         return 'S'
+
+    elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
+        return 'M'
 
     raise NotImplementedError(f'Unable to encode[{type(datum)}] datum[{datum}]')
 
@@ -57,6 +63,12 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
 
     elif isinstance(datum, str):
         return datum
+
+    elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
+        return encode_aws_object(datum._payload)
+
+    else:
+        raise NotImplementedError
 
     return None
 

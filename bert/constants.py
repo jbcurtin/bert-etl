@@ -17,6 +17,8 @@ DATETIME_FORMAT: str = '%Y-%m-%dT%H:%M:%SZ'
 WWW_SECRET: str = os.environ.get('WWW_SECRET', 'noop')
 WWW_PORT: int = int(os.environ.get('WWW_PORT', 8000))
 
+REPORTING_TIME_FORMAT: str = '%Y-%m-%dT%H-%M-%S'
+
 MAIN_SERVICE_HOST: str = os.environ.get('MAIN_SERVICE_HOST', None)
 MAIN_SERVICE_NONCE: str = os.environ.get('MAIN_SERVICE_NONCE', None)
 

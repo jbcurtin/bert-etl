@@ -17,62 +17,146 @@ logger = logging.getLogger(__name__)
 PWN = typing.TypeVar('PWN')
 DELAY: int = 15
 
-class DynamodbQueue:
-    @staticmethod
-    def Pack(datum: typing.Dict[str, typing.Any]) -> str:
-        """
-        Dict -> AWS Dict -> json.dumps
-        """
-        datum = bert_encoders.encode_object(datum)
-        return datum
+class QueueItem:
+    __slots__ = ('_payload')
+    _payload: typing.Dict[str, typing.Any]
+    def __init__(self: PWN, payload: typing.Dict[str, typing.Any]) -> None:
+        self._payload = payload
 
-    @staticmethod
-    def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
-        """
-        AWS Dynamodb Dict -> Dict
-        """
-        return bert_encoders.decode_object(datum)
+    def calc_identity(self: PWN) -> str:
+        combined: str = ''.join(bert_encoders.encode_identity_object(self._payload))
+        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
 
-    _key: str = None
-    _pipeline_type: bert_constants.PipelineType
+    def keys(self: PWN) -> typing.Any:
+        return super(QueueItem, self).keys()
 
-    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
-        self._key = key
-        self._pipeline_type = pipeline_type
+    def get(self: PWN, name: str, default: typing.Any = None) -> typing.Any:
+        return self._payload.get(name, default)
+
+    def clone(self: PWN) -> typing.Any:
+        return self.__class__(copy.deepcopy(self._payload))
+
+    def __getitem__(self: PWN, name: str) -> typing.Any:
+        try:
+            return self._payload[name]
+        except KeyError:
+            raise KeyError(f'key-name[{name}] not found')
+
+    def __setitem__(self: PWN, name: str, value: typing.Any) -> None:
+        self._payload[name] = value
+
+    def __delitem__(self: PWN, name: str) -> None:
+        try:
+            del self._payload[name]
+        except KeyError:
+            raise KeyError(f'key-name[{name}] not found')
+
+class BaseQueue:
+    _table_name: str
+    _value: QueueItem
+    def __init__(self: PWN, table_name: str) -> None:
+        self._table_name = table_name
+        self._value = None
+
+    def __next__(self) -> typing.Any:
+        if self._value:
+            self._destroy(self._value)
+
+        self._value = self.get()
+        if self._value is None or self._value == 'STOP':
+            raise StopIteration
+
+        return self._value
+
+    def get(self: PWN) -> QueueItem:
+        raise NotImplementedError
+
+    def put(self: PWN, value: typing.Union[typing.Dict[str, typing.Any], QueueItem]) -> None:
+        raise NotImplementedError
 
     def __iter__(self) -> PWN:
         return self
 
-    def __next__(self) -> typing.Any:
-        value = self.get()
-        if value is None or value == 'STOP':
-            raise StopIteration
+    def _destroy(self: PWN, queue_item: QueueItem) -> None:
+        raise NotImplementedError
 
-        return value
+class DynamodbQueue(BaseQueue):
+    _dynamodb_client: 'boto3.client("dynamodb")'
+    def __init__(self: PWN, table_name: str) -> None:
+        super(DynamodbQueue, self).__init__(table_name)
+        self._dynamodb_client = boto3.client('dynamodb')
 
-    def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
-        combined: str = ''.join(bert_encoders.encode_identity_object(value))
-        identity: str = hashlib.sha256(combined.encode('utf-8')).hexdigest()
-        client: typing.Any = boto3.client('dynamodb')
-        value: str = self.__class__.Pack({'identity': identity, 'datum': copy.deepcopy(value)})
-        client.put_item(TableName=self._key, Item=value)
+    def _destroy(self: PWN, queue_item: QueueItem, confirm_delete: bool = False) -> None:
+        if confirm_delete:
+            self._dynamodb_client.delete_item(
+                TableName=self._table_name,
+                Key={'identity': {'S': queue_item.calc_identity()}},
+                Expected={'identity': {'Exists': True, 'Value': value['identity']}})
+
+        else:
+            self._dynamodb_client.delete_item(
+                TableName=self._table_name,
+                Key={'identity': {'S': queue_item.calc_identity()}})
+
+    def put(self: PWN, value: typing.Union[typing.Dict[str, typing.Any], QueueItem]) -> None:
+        if isinstance(value, dict):
+            queue_item = QueueItem(value)
+
+        elif isinstance(value, QueueItem):
+            queue_item = value
+
+        else:
+            raise NotImplementedError
+
+        encoded_value = bert_encoders.encode_object({
+            'identity': queue_item.calc_identity(),
+            'datum': queue_item.clone(),
+        })
+        self._dynamodb_client.put_item(TableName=self._table_name, Item=encoded_value)
 
     def get(self: PWN) -> typing.Dict[str, typing.Any]:
-        client: typing.Any = boto3.client('dynamodb')
         try:
-            # logger.info(f'Scanning Table[{self._key}]')
-            value: typing.Any = client.scan(TableName=self._key, Select='ALL_ATTRIBUTES', Limit=1)['Items'][0]
+            value: typing.Any = self._dynamodb_client.scan(TableName=self._table_name, Select='ALL_ATTRIBUTES', Limit=1)['Items'][0]
         except IndexError:
             return None
 
-        except Exception as err:
-            logger.info(f'Resource Name[{self._key}]')
-            raise err
+        else:
+            queue_item = QueueItem(bert_encoders.decode_object(value['datum']))
+            if value['identity']['S'] in ['sns-entry', 'invoke-arg']:
+                return queue_item
+
+            assert queue_item.calc_identity() == value['identity']['S']
+            return queue_item
+
+class RedisQueue(BaseQueue):
+    _table_name: str
+    _redis_client: 'redis-client'
+    def __init__(self, table_name: str) -> None:
+        super(RedisQueue, self).__init__(table_name)
+        self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
+
+    def flushdb(self) -> None:
+        self._redis_client.flushdb()
+
+    def _destroy(self: PWN, queue_item: QueueItem) -> None:
+        pass
+
+    def get(self) -> QueueItem:
+        try:
+            value: str = self._redis_client.lpop(self._table_name).decode(bert_constants.ENCODING)
+        except AttributeError:
+            return 'STOP'
 
         else:
-            unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
-            client.delete_item(TableName=self._key, Key={'identity': value['identity']})
-            return unpacked
+            return bert_encoders.decode_object(json.loads(value)['datum'])
+
+    def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
+        encoded_value = json.dumps(bert_encoders.encode_object({
+            'identity': 'local-queue',
+            'datum': value
+        })).encode(bert_constants.ENCODING)
+        self._redis_client.rpush(self._table_name, encoded_value)
+
 
 class StreamingQueue(DynamodbQueue):
     """
@@ -80,41 +164,26 @@ class StreamingQueue(DynamodbQueue):
         the available API already utilized. We also want to keep the available `put` function so that the `done_queue` api will still push contents into the next `work_queue`.
         We'll also argment the local `get` function api and only pull from records local to the stream and not pull from dynamodb.
     """
-    _key: str = None
     # Share the memory across invocations, within the same process/thread. This allows for
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
-    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
-        self._key = key
+    def local_put(self: PWN, record: typing.Union[typing.Dict[str, typing.Any], QueueItem]) -> None:
+        if isinstance(record, dict):
+            queue_item = QueueItem(bert_encoders.decode_object(record['datum']))
 
-    def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
-        self._queue.append(copy.deepcopy(record))
+        elif isinstance(record, QueueItem):
+            queue_item = record
 
-    def get(self: PWN) -> typing.Dict[str, typing.Any]:
-        while True:
-            try:
-                value: typing.Any = self._queue.pop(0)
-            except IndexError:
-                return super(StreamingQueue, self).get()
+        self._queue.append(queue_item)
 
-            else:
-                unpacked: typing.Dict[str, typing.Any] = self.__class__.UnPack(copy.deepcopy(value)['datum'])
-                client = boto3.client('dynamodb')
-                local_timeout: datetime = datetime.utcnow() + timedelta(seconds=DELAY)
-                if value['identity']['S'] in ['sns-entry', 'invoke-arg']:
-                    return unpacked
+    def get(self: PWN) -> QueueItem:
+        try:
+            value: QueueItem = self._queue.pop(0)
+        except IndexError:
+            return super(StreamingQueue, self).get()
 
-                try:
-                    client.delete_item(
-                        TableName=self._key,
-                        Key={'identity': value['identity']},
-                        Expected={'identity': {'Exists': True, 'Value': value['identity']}})
-                except client.exceptions.ConditionalCheckFailedException:
-                    # time.sleep(.1)
-                    continue
-
-                else:
-                    return unpacked
+        else:
+            return value
 
 class LocalQueue(DynamodbQueue):
     """
@@ -142,45 +211,4 @@ class LocalQueue(DynamodbQueue):
 
         else:
             return value
-
-class RedisQueue:
-    @staticmethod
-    def Pack(datum: typing.Dict[str, typing.Any]) -> str:
-        return bert_encoders.encode_object(datum)
-
-    @staticmethod
-    def UnPack(datum: str) -> typing.Dict[str, typing.Any]:
-        return bert_encoders.decode_object(datum)
-
-    def __init__(self, key: str, pipeline_type: bert_constants.PipelineType):
-        self._key = key
-        self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        value = self.get()
-        if value is None or value == 'STOP':
-            raise StopIteration
-
-        return value
-
-    def flushdb(self) -> None:
-        self._redis_client.flushdb()
-
-    def get(self) -> typing.Dict[str, typing.Any]:
-        try:
-            value: str = self._redis_client.lpop(self._key).decode(bert_constants.ENCODING)
-        except AttributeError:
-            return 'STOP'
-
-        else:
-            value: typing.Dict[str, typing.Any] = json.loads(value)
-            return self.__class__.UnPack({'M': value})
-
-    def put(self, value: typing.Dict[str, typing.Any]) -> None:
-        value: typing.Dict[str, typing.Any] = self.__class__.Pack(value)
-        value: str = json.dumps(value)
-        self._redis_client.rpush(self._key, value.encode(bert_constants.ENCODING))
 

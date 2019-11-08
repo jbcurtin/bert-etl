@@ -34,6 +34,9 @@ ZIP_EXCLUDES: typing.List[str] = [
     '*.hg', 'pip', 'docutils*', 'setuputils*', '__pycache__/*',
 ]
 COMMON_EXCLUDES: typing.List[str] = ['env', 'lambdas']
+ROLE_NAME: str = 'bert-etl-lambda-execution-policy-trust'
+POLICY_NAME: str = 'bert-etl-lambda-execution-policy'
+
 try:
     COMPRESSION_METHOD: int = zipfile.ZIP_DEFLATED
 except ImportError: #pragma: no cover
@@ -614,31 +617,29 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
             }
         ]
     }
-    trust_policy_name: str = 'bert-etl-lambda-execution-policy-trust'
-    policy_name: str = 'bert-etl-lambda-execution-policy'
     iam_role = {
         'Path': '/',
-        'RoleName': trust_policy_name,
+        'RoleName': ROLE_NAME,
         'AssumeRolePolicyDocument': json.dumps(trust_policy_document),
         'Description': 'Bert-ETL Lambda Execution Role',
     }
     iam_policy = {
         'Path': '/',
-        'PolicyName': policy_name,
+        'PolicyName': POLICY_NAME,
         'PolicyDocument': json.dumps(policy_document),
         'Description': 'Bert-ETL Lambda Execution Policy'
     }
     iam_client = boto3.client('iam')
-    role = bert_deploy_shortcuts.map_iam_role(trust_policy_name)
+    role = bert_deploy_shortcuts.map_iam_role(ROLE_NAME)
     if role is None:
         iam_client.create_role(**iam_role)
-        role = bert_deploy_shortcuts.map_iam_role(trust_policy_name)
+        role = bert_deploy_shortcuts.map_iam_role(ROLE_NAME)
 
-    policy = bert_deploy_shortcuts.map_iam_policy(policy_name)
+    policy = bert_deploy_shortcuts.map_iam_policy(POLICY_NAME)
     if policy is None:
         iam_client.create_policy(**iam_policy)
-        policy = bert_deploy_shortcuts.map_iam_policy(policy_name)
-        iam_client.attach_role_policy(RoleName=trust_policy_name, PolicyArn=policy['Arn'])
+        policy = bert_deploy_shortcuts.map_iam_policy(POLICY_NAME)
+        iam_client.attach_role_policy(RoleName=ROLE_NAME, PolicyArn=policy['Arn'])
 
     for job_name, conf in jobs.items():
         conf['aws-deployed']['iam']['execution-role'] = bert_deploy_shortcuts.map_iam_role_by_arn(conf['iam']['execution-role-arn'])
@@ -706,6 +707,34 @@ def destroy_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
 
         else:
             logger.info(f'Deleted Lambda[{job_name}]')
+
+def destroy_dynamodb_tables(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('dynamodb')
+    table_names: typing.List[str] = []
+    for job_name, conf in jobs.items():
+        table_names.append(conf['aws-deploy']['work-table-name'])
+        table_names.append(conf['aws-deploy']['done-table-name'])
+
+    else:
+        table_names = [item for item in set(table_names)]
+
+    for table_name in table_names:
+        logger.info(f'Destroying Table[{table_name}]')
+        try:
+            client.delete_table(TableName=table_name)
+        except client.exceptions.ResourceNotFoundException:
+            continue
+
+    for table_name in table_names:
+        while True:
+            try:
+                response = client.describe_table(TableName=table_name)
+            except client.exceptions.ResourceNotFoundException:
+                logger.info(f'Destroyed Table[{table_name}]')
+                break
+
+            else:
+                time.sleep(.1)
 
 def create_lambda_s3_item(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
     if conf['deployment']['s3_bucket'] is None:
@@ -1006,5 +1035,117 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                     'Id': conf['aws-deployed']['events']['sns-target-id'],
                 }])
 
-        # if conf['spaces']['parent']['noop-space'] is True and conf['events']['s3']:
+def deploy_monitor() -> None:
+    lambda_client = boto3.client('lambda')
+    events_client = boto3.client('events')
+    try:
+        function = lambda_client.get_function(FunctionName=bert_reporting.MONITOR_NAME)
+        return
+    except lambda_client.exceptions.ResourceNotFoundException:
+        pass
+
+    monitor_source: str = """import typing
+
+def handle(event: typing.Any, context: typing.Any) -> None:
+    from bert.deploy import reporting
+    for job_identity, job_name in reporting.scan_for_stalled_jobs():
+        reporting.restart_stalled_job(job_identity, job_name)
+"""
+    excludes: typing.List[str] = bert_utils.ZIP_EXCLUDES + bert_utils.COMMON_EXCLUDES
+    monitor_dirpath: str = os.path.join(os.getcwd(), 'lambdas', 'monitor')
+    monitor_archive_path: str = os.path.join(os.getcwd(), 'lambdas', 'monitor.zip')
+    if not os.path.exists(monitor_dirpath):
+        os.makedirs(monitor_dirpath)
+
+    monitor_handler_path: str = os.path.join(monitor_dirpath, 'monitor.py')
+    with open(monitor_handler_path, 'w') as stream:
+        stream.write(monitor_source)
+
+    try:
+        compression_method: int = zipfile.ZIP_DEFLATED
+    except ImportError: #pragma: no cover
+        compression_method: int = zipfile.ZIP_STORED
+
+    # Include Dev Version of bert-etl if found
+    if os.environ.get('BERT_DEV', None):
+        include_bert_dev(os.environ['BERT_DEV'], monitor_dirpath, excludes)
+    else:
+        bert_utils.run_command(f'pip install -t {monitor_dirpath} bert-etl -U')
+
+    with zipfile.ZipFile(monitor_archive_path, 'w', compression_method) as archive:
+        for root, dirs, files in os.walk(monitor_dirpath):
+            for filename in files:
+                if filename in excludes:
+                    continue
+
+                if filename.endswith('.pyc'):
+                    continue
+
+                abs_filename: str = os.path.join(root, filename)
+                if filename.endswith('.py'):
+                    os.chmod(abs_filename, 0o755)
+
+                zip_info: zipfile.ZipInfo = zipfile.ZipInfo(os.path.join(root.replace(monitor_dirpath, '').lstrip(os.sep), filename))
+                zip_info.create_system = 3
+                zip_info.external_attr = 0o755 << int(16)
+                with open(abs_filename, 'rb') as file_stream:
+                    archive.writestr(zip_info, file_stream.read(), compression_method)
+
+            for dirname in dirs:
+                if dirname in excludes:
+                    continue
+
+    role = bert_deploy_shortcuts.map_iam_role(ROLE_NAME)
+    logger.info(f'Creating Monitor Function')
+    response = lambda_client.create_function(
+        FunctionName=bert_reporting.MONITOR_NAME,
+        Runtime='python3.7',
+        MemorySize=256,
+        Role=role['Arn'],
+        Handler='monitor.handle',
+        Code={'ZipFile': open(monitor_archive_path, 'rb').read()},
+        Timeout=900,
+        Environment={})
+    function = lambda_client.get_function(FunctionName=bert_reporting.MONITOR_NAME)
+    rule_name: str = 'monitor-rule'
+    schedule_expression: str = 'rate(5 minutes)'
+    statement_id = f'{rule_name}-event'
+    target_id: str = f'{rule_name}-target'
+
+    try:
+        rule = events_client.describe_rule(Name=rule_name)
+    except events_client.exceptions.ResourceNotFoundException:
+        events_client.put_rule(
+            Name=rule_name,
+            RoleArn=role['Arn'],
+            ScheduleExpression=schedule_expression,
+            State='ENABLED')
+        rule = events_client.describe_rule(Name=rule_name)
+
+    else:
+        for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=rule_name):
+            target_ids = [target['Id'] for target in page['Targets']]
+            if len(target_ids) > 0:
+                events_client.remove_targets(Rule=rule_name, Ids=targets_ids, Force=True)
+
+        events_client.delete_rule(Name=rule_name)
+        events_client.put_rule(Name=rule_name,
+            RoleArn=role['Arn'],
+            ScheduleExpression=schedule_expression,
+            State='ENABLED')
+
+        lambda_client.add_permission(
+            FunctionName=bert_reporting.MONITOR_NAME,
+            StatementId=statement_id,
+            Action='lambda:InvokeFunction',
+            Principal='events.amazonaws.com',
+            SourceArn=rule['Arn'])
+
+        events_client.put_targets(
+            Rule=rule_name,
+            Targets=[{
+                'Arn': function['Configuration']['FunctionArn'],
+                'Id': target_id
+            }])
+
 

@@ -134,10 +134,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             bert_configuration.get('every_lambda', {'events':{}}),
             bert_configuration.get(f'{job_name}', {'events': {}}))
 
-        batch_size: int = bert_shortcuts.get_if_exists('batch_size', '250', int,
+        batch_size: int = bert_shortcuts.get_if_exists('batch_size', '100', int,
             bert_configuration.get('every_lambda', {}),
             bert_configuration.get(job_name, {}))
-        batch_size_delay: int = bert_shortcuts.get_if_exists('batch_size_delay', '3', int,
+        batch_size_delay: int = bert_shortcuts.get_if_exists('batch_size_delay', '0', int,
             bert_configuration.get('every_lambda', {}),
             bert_configuration.get(job_name, {}))
 
@@ -252,16 +252,16 @@ def comm_binders(func: types.FunctionType) -> typing.Tuple['QueueType', 'QueueTy
     ologger = logging.getLogger('.'.join([func.__name__, multiprocessing.current_process().name]))
     ologger.debug(f'Bert Queue Type[{bert_constants.QueueType}]')
     if bert_constants.QueueType is bert_constants.QueueTypes.Dynamodb:
-        return bert_queues.DynamodbQueue(func.work_key, func.pipeline_type), bert_queues.DynamodbQueue(func.done_key, func.pipeline_type), ologger
+        return bert_queues.DynamodbQueue(func.work_key), bert_queues.DynamodbQueue(func.done_key), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.StreamingQueue:
-        return bert_queues.StreamingQueue(func.work_key, func.pipeline_type), bert_queues.StreamingQueue(func.done_key, func.pipeline_type), ologger
+        return bert_queues.StreamingQueue(func.work_key), bert_queues.StreamingQueue(func.done_key), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.LocalQueue:
-        return bert_queues.LocalQueue(func.work_key, func.pipeline_type), bert_queues.LocalQueue(func.done_key, func.pipeline_type), ologger
+        return bert_queues.LocalQueue(func.work_key), bert_queues.LocalQueue(func.done_key), ologger
 
     elif bert_constants.QueueType is bert_constants.QueueTypes.Redis:
-        return bert_queues.RedisQueue(func.work_key, func.pipeline_type), bert_queues.RedisQueue(func.done_key, func.pipeline_type), ologger
+        return bert_queues.RedisQueue(func.work_key), bert_queues.RedisQueue(func.done_key), ologger
 
     else:
         raise NotImplementedError(f'Unsupported QueueType[{bert_constants.QueueType}]')

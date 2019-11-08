@@ -6,13 +6,39 @@ import types
 import typing
 import uuid
 
+from bert import constants as bert_constants
+
 from botocore.errorfactory import ClientError
 
 from datetime import datetime, timedelta
 
 TABLE_NAME: str = 'bert-etl-reporting'
 PWN: typing.TypeVar = typing.TypeVar('PWN')
+MONITOR_NAME: str = 'bert-etl-monitor'
 logger = logging.getLogger(__name__)
+
+
+def scan_for_stalled_jobs() -> types.GeneratorType:
+    client = boto3.client('dynamodb')
+    for item in client.scan(TableName=TABLE_NAME, ConsistentRead=True)['Items']:
+        created: datetime = datetime.strptime(item['created']['S'], bert_constants.REPORTING_TIME_FORMAT)
+        if created < datetime.utcnow() - timedelta(minutes=15):
+            yield item['identity']['S'], item['job_name']['S']
+
+def restart_stalled_job(job_identity: str, job_name: str) -> None:
+    lambda_client = boto3.client('lambda')
+    dynamodb_client = boto3.client('dynamodb')
+    try:
+        function = lambda_client.get_function(FunctionName=job_name)
+    except lambda_client.exceptions.ResourceNotFoundException:
+        logger.info(f"Job[{job_name}] Lambda doesn't exist")
+    else:
+        logger.info(f"Restarting Job[{job_name}]")
+        lambda_client.invoke(FunctionName=job_name, InvocationType='Event', Payload=b'{}')
+        dynamodb_client.delete_item(
+            TableName=TABLE_NAME,
+            Key={'identity': {'S': job_identity}})
+
 
 class track_execution():
     def __init__(self: PWN, job: types.FunctionType, **kwargs) -> None:
@@ -24,6 +50,7 @@ class track_execution():
         value = {
             'identity': {'S': self._identity},
             'job_name': {'S': self._job.__name__},
+            'created': {'S': datetime.utcnow().strftime(bert_constants.REPORTING_TIME_FORMAT)}
         }
         self._client.put_item(TableName=TABLE_NAME, Item=value)
         return self
