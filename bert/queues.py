@@ -5,6 +5,7 @@ import logging
 import json
 import time
 import typing
+import uuid
 
 from bert import \
     encoders as bert_encoders, \
@@ -18,14 +19,20 @@ PWN = typing.TypeVar('PWN')
 DELAY: int = 15
 
 class QueueItem:
-    __slots__ = ('_payload')
+    __slots__ = ('_payload', '_identity')
     _payload: typing.Dict[str, typing.Any]
-    def __init__(self: PWN, payload: typing.Dict[str, typing.Any]) -> None:
+    _identity: str
+    def __init__(self: PWN, payload: typing.Dict[str, typing.Any], identity: str = None) -> None:
         self._payload = payload
+        self._identity = identity
 
     def calc_identity(self: PWN) -> str:
+        if self._identity:
+            return self._identity
+
         combined: str = ''.join(bert_encoders.encode_identity_object(self._payload))
-        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
+        combined: str = f'{combined}-{uuid.uuid4()}'
+        return hashlib.sha256(combined.encode(bert_constants.ENCODING)).hexdigest()
 
     def keys(self: PWN) -> typing.Any:
         return super(QueueItem, self).keys()
@@ -59,8 +66,10 @@ class BaseQueue:
         self._value = None
 
     def __next__(self) -> typing.Any:
-        if self._value:
+        if not self._value is None:
+            logger.info('Destroying Value')
             self._destroy(self._value)
+            self._value = None
 
         self._value = self.get()
         if self._value is None or self._value == 'STOP':
@@ -121,11 +130,12 @@ class DynamodbQueue(BaseQueue):
             return None
 
         else:
-            queue_item = QueueItem(bert_encoders.decode_object(value['datum']))
+            queue_item = QueueItem(bert_encoders.decode_object(value['datum']), value['identity']['S'])
             if value['identity']['S'] in ['sns-entry', 'invoke-arg']:
                 return queue_item
 
-            assert queue_item.calc_identity() == value['identity']['S']
+            # The order of data when coming out of the database maynot be preserved, resulting in a different identity
+            # assert queue_item.calc_identity() == value['identity']['S'], f'{queue_item.calc_identity()} != {value["identity"]["S"]}'
             return queue_item
 
 class RedisQueue(BaseQueue):
@@ -169,7 +179,7 @@ class StreamingQueue(DynamodbQueue):
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
     def local_put(self: PWN, record: typing.Union[typing.Dict[str, typing.Any], QueueItem]) -> None:
         if isinstance(record, dict):
-            queue_item = QueueItem(bert_encoders.decode_object(record['datum']))
+            queue_item = QueueItem(bert_encoders.decode_object(record['datum']), record['identity']['S'])
 
         elif isinstance(record, QueueItem):
             queue_item = record

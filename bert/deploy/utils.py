@@ -590,6 +590,14 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
             },
             {
                 "Effect": "Allow",
+                "Action": [
+                    "lambda:InvokeFunction",
+                    "lambda:GetFunction"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
                 "Action": "s3:*",
                 "Resource": "*"
             },
