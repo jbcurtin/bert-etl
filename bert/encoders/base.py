@@ -31,6 +31,9 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     elif isinstance(datum, str):
         return 'S'
 
+    elif isinstance(datum, bool):
+        return 'S'
+
     elif isinstance(datum, int):
         return 'S'
 
@@ -54,6 +57,9 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
             datum[idx] = {_find_aws_encoding(value): encode_aws_object(value)}
 
         return datum
+
+    elif isinstance(datum, bool):
+        return f'bool:{datum}'
 
     elif isinstance(datum, int):
         return f'int:{datum}'
@@ -88,6 +94,16 @@ def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
 
         elif encoding_type == 'B':
             return encoded
+
+        elif encoding_type == 'S' and encoded[:5] == 'bool:':
+            value: str = encoded.split(':', 1)[1].lower()
+            if value == 'true':
+                return True
+
+            elif value == 'false':
+                return False
+
+            raise NotImplementedError(f'Unable to decode datum[{value}]')
 
         elif encoding_type == 'S' and encoded[:4] == 'int:':
             return int(encoded.split(':', 1)[1])

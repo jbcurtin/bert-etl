@@ -133,6 +133,11 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
             'events.schedule_expression', None, str,
             bert_configuration.get('every_lambda', {'events':{}}),
             bert_configuration.get(f'{job_name}', {'events': {}}))
+        bottle_schedule_expression: str = bert_shortcuts.get_if_exists(
+            'events.bottle_schedule_expression', 'rate(5 minutes)', str,
+            bert_configuration.get('every_lambda', {'events':{}}),
+            bert_configuration.get(job_name, {'events': {}}))
+
 
         batch_size: int = bert_shortcuts.get_if_exists('batch_size', '100', int,
             bert_configuration.get('every_lambda', {}),
@@ -206,7 +211,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
                     # 'rate': 'rate(5 minutes)',
                 },
                 'bottle': {
-                    'schedule-expression': schedule_expression or 'rate(1 minute)',
+                    'schedule-expression': bottle_schedule_expression,
                 },
                 'spaces': {
                     'func_space': job.func_space,
