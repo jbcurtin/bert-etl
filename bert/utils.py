@@ -91,6 +91,13 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             [])
         invoke_args: typing.List[typing.Dict[str, typing.Any]] = bert_shortcuts.load_invoke_args(invoke_args)
 
+        # This ENVVar will exist when the bert-etl-monitor function is deployed to AWS Lambda. bert-etl-monitor is a 
+        #  utility function and doesn't require any additional packages, encoders or decoders.
+        if not os.environ.get('BERT_MODULE_NAME', None) is None:
+            identity_encoders = []
+            queue_encoders = []
+            queue_decoders = []
+
         # Make sure the encoders exist
         bert_encoders.load_encoders_or_decoders(identity_encoders)
         bert_encoders.load_encoders_or_decoders(queue_encoders)
