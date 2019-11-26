@@ -591,6 +591,17 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
             {
                 "Effect": "Allow",
                 "Action": [
+                    "kms:Describe*",
+                    "kms:GenerateRandom",
+                    "kms:Get*",
+                    "kms:List*",
+                    "kms:Decrypt"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
                     "lambda:InvokeFunction",
                     "lambda:GetFunction"
                 ],
