@@ -38,8 +38,8 @@ def start_service(options: argparse.Namespace) -> None:
     if options.flush_db:
         bert_utils.flush_db()
 
-    jobs = bert_utils.scan_jobs(options)
-    jobs = bert_utils.map_jobs(jobs)
+    jobs = bert_utils.scan_jobs(options.module_name)
+    jobs = bert_utils.map_jobs(jobs, options.module_name)
 
     signal.signal(signal.SIGINT, handle_signal)
     from bert.runner import manager

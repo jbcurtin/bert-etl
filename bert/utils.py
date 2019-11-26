@@ -25,9 +25,9 @@ COMMON_EXCLUDES: typing.List[str] = ['env', 'lambdas']
 
 logger = logging.getLogger(__name__)
 
-def scan_jobs(options) -> typing.Dict[str, typing.Any]:
+def scan_jobs(module_name: str) -> typing.Dict[str, typing.Any]:
     jobs: typing.Dict[str, typing.Any] = {}
-    module = importlib.import_module(f'{options.module_name}.jobs')
+    module = importlib.import_module(f'{module_name}.jobs')
     for member_name in dir(module):
         if member_name.startswith('_'):
             continue
@@ -61,7 +61,7 @@ def scan_jobs(options) -> typing.Dict[str, typing.Any]:
                     break
     return ordered
 
-def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
+def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
     confs: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
     bert_configuration = bert_shortcuts.load_configuration() or {}
     deployment_config = bert_shortcuts.obtain_deployment_config(bert_configuration)
@@ -132,7 +132,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
         schedule_expression: str = bert_shortcuts.get_if_exists(
             'events.schedule_expression', None, str,
             bert_configuration.get('every_lambda', {'events':{}}),
-            bert_configuration.get(f'{job_name}', {'events': {}}))
+            bert_configuration.get(job_name, {'events': {}}))
         bottle_schedule_expression: str = bert_shortcuts.get_if_exists(
             'events.bottle_schedule_expression', 'rate(5 minutes)', str,
             bert_configuration.get('every_lambda', {'events':{}}),
@@ -153,6 +153,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any]) -> None:
 
         # Set QueueType to dynamodb unless they've specifically requested a BERT_QUEUE_TYPE
         env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
+        env_vars['BERT_MODULE_NAME'] = module_name
         requirements: typing.Dict[str, str] = bert_shortcuts.merge_requirements(
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))

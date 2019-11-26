@@ -34,11 +34,12 @@ def capture_options() -> typing.Any:
     parser.add_argument('-m', '--module-name', default='bert')
     parser.add_argument('-f', '--flush', default=False, action="store_true")
     parser.add_argument('-d', '--dry-run', default=False, action="store_true", help="Create the lambda functions and output ./lambdas without deploying to AWS")
+    parser.add_argument('-t', '--run-monitor', default=False, action="store_true", help="Run Monitor function locally")
     return parser.parse_args()
 
 def deploy_service(options) -> None:
-    jobs: typing.Dict[str, typing.Any] = bert_utils.scan_jobs(options)
-    jobs: typing.Dict[str, typing.Any] = bert_utils.map_jobs(jobs)
+    jobs: typing.Dict[str, typing.Any] = bert_utils.scan_jobs(options.module_name)
+    jobs: typing.Dict[str, typing.Any] = bert_utils.map_jobs(jobs, options.module_name)
 
     if options.service == Service.AWSLambda:
         if options.invoke:
@@ -62,6 +63,12 @@ def deploy_service(options) -> None:
 
             import sys; sys.exit(0)
 
+        if options.run_monitor:
+            from bert.deploy import reporting
+            logger.info(f'Running monitor function locally')
+            reporting.monitor_function_progress(options.module_name)
+            import sys; sys.exit(0)
+
         bert_deploy_utils.validate_inputs(jobs)
         bert_deploy_utils.build_project(jobs)
         bert_deploy_utils.build_lambda_handlers(jobs)
@@ -82,7 +89,8 @@ def deploy_service(options) -> None:
         bert_deploy_utils.bind_lambdas_to_tables(jobs)
         bert_deploy_utils.bind_events_for_bottle_functions(jobs)
         bert_deploy_utils.bind_events_for_init_function(jobs)
-        bert_deploy_utils.deploy_monitor()
+        bert_deploy_utils.destroy_monitor()
+        bert_deploy_utils.deploy_monitor(options.module_name)
 
     else:
         raise NotImplementedError(options.service)

@@ -277,7 +277,7 @@ def build_package(job_name: str, job_conf: typing.Dict[str, typing.Any], exclude
 def include_bert_dev(dev_path: str, build_path: str, excludes: typing.List[str] = []) -> None:
     # Make sure the correct filepath was provided
     for filename in ['__init__.py', 'runner', 'deploy', 'remote', 'binding.py', 'constants.py', 'utils.py', 'shortcuts.py']:
-        assert filename in os.listdir(dev_path), f'Incorrect BERT_DEV[{bert_dev_path}] provided, filename[{filename}] not found'
+        assert filename in os.listdir(dev_path), f'Incorrect BERT_DEV[{dev_path}] provided, filename[{filename}] not found'
 
     bert_path: str = os.path.join(build_path, 'bert')
     if not os.path.exists(bert_path):
@@ -1043,7 +1043,19 @@ def bind_events_for_init_function(jobs: typing.Dict[str, typing.Any]) -> None:
                     'Id': conf['aws-deployed']['events']['sns-target-id'],
                 }])
 
-def deploy_monitor() -> None:
+def destroy_monitor() -> None:
+    lambda_client = boto3.client('lambda')
+    try:
+        function = lambda_client.get_function(FunctionName=bert_reporting.MONITOR_NAME)
+
+    except lambda_client.exceptions.ResourceNotFoundException:
+        pass
+
+    else:
+        logger.info('Destroying Monitor Function')
+        lambda_client.delete_function(FunctionName=bert_reporting.MONITOR_NAME)
+
+def deploy_monitor(module_name: str) -> None:
     lambda_client = boto3.client('lambda')
     events_client = boto3.client('events')
     try:
@@ -1056,8 +1068,9 @@ def deploy_monitor() -> None:
 
 def handle(event: typing.Any, context: typing.Any) -> None:
     from bert.deploy import reporting
-    for job_identity, job_name in reporting.scan_for_stalled_jobs():
-        reporting.restart_stalled_job(job_identity, job_name)
+    reporting.monitor_function_progress()
+    # for job_identity, job_name in reporting.scan_for_stalled_jobs():
+    #     reporting.restart_stalled_job(job_identity, job_name)
 """
     excludes: typing.List[str] = bert_utils.ZIP_EXCLUDES + bert_utils.COMMON_EXCLUDES
     monitor_dirpath: str = os.path.join(os.getcwd(), 'lambdas', 'monitor')
@@ -1076,9 +1089,27 @@ def handle(event: typing.Any, context: typing.Any) -> None:
 
     # Include Dev Version of bert-etl if found
     if os.environ.get('BERT_DEV', None):
+        # Installing bert-etl for the requirements, Then overriding the bert-etl/bert path with BERT_DEV.
+        #  I like this approach better than pulling in bert from setup.py in order to share the REQUIREMENTS
+        #   between both execution contexts.
+        #  Sure, there is a problem with having to publish a version of bert-etl with a new package as required, but this
+        #   logic was added only because map_jobs needs to run in the context of the bert-etl-monitory. Which requires redis, 
+        #   pyyaml, and a few other packages.
+        bert_utils.run_command(f'pip install -t {monitor_dirpath} bert-etl -U')
+        bert_dev_path: str = os.path.join(monitor_dirpath, 'bert')
+        shutil.rmtree(bert_dev_path)
         include_bert_dev(os.environ['BERT_DEV'], monitor_dirpath, excludes)
     else:
         bert_utils.run_command(f'pip install -t {monitor_dirpath} bert-etl -U')
+
+    # Include jobs.py file from module_name
+    module_path: str = os.path.join(os.getcwd(), module_name)
+    module_monitor_dirpath: str = os.path.join(monitor_dirpath, module_name)
+    copytree(module_path, module_monitor_dirpath, metadata=False, symlinks=False, ignore=shutil.ignore_patterns(*excludes))
+
+    # Include bert-etl.yaml
+    bert_etl_yaml_path = os.path.join(os.getcwd(), 'bert-etl.yaml')
+    shutil.copy2(bert_etl_yaml_path, monitor_dirpath)
 
     with zipfile.ZipFile(monitor_archive_path, 'w', compression_method) as archive:
         for root, dirs, files in os.walk(monitor_dirpath):
@@ -1113,7 +1144,7 @@ def handle(event: typing.Any, context: typing.Any) -> None:
         Handler='monitor.handle',
         Code={'ZipFile': open(monitor_archive_path, 'rb').read()},
         Timeout=900,
-        Environment={})
+        Environment={'Variables': {'BERT_MODULE_NAME': module_name}})
     function = lambda_client.get_function(FunctionName=bert_reporting.MONITOR_NAME)
     rule_name: str = 'monitor-rule'
     schedule_expression: str = 'rate(5 minutes)'
@@ -1134,7 +1165,7 @@ def handle(event: typing.Any, context: typing.Any) -> None:
         for page in events_client.get_paginator('list_targets_by_rule').paginate(Rule=rule_name):
             target_ids = [target['Id'] for target in page['Targets']]
             if len(target_ids) > 0:
-                events_client.remove_targets(Rule=rule_name, Ids=targets_ids, Force=True)
+                events_client.remove_targets(Rule=rule_name, Ids=target_ids, Force=True)
 
         events_client.delete_rule(Name=rule_name)
         events_client.put_rule(Name=rule_name,

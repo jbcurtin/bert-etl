@@ -3,6 +3,15 @@ import sys
 
 from setuptools import find_packages, setup
 
+# Hacky, but functional
+file_dir: str = os.path.dirname(__file__)
+bert_path: str = os.path.join(file_dir, 'bert')
+if not os.path.exists(bert_path):
+    raise NotImplementedError
+
+sys.path.append(file_dir)
+import bert
+
 # Always reference code-origin
 # https://github.com/django/django/blob/master/setup.py#L7
 
@@ -28,7 +37,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.4.48'
+version = '0.4.49'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -55,7 +64,7 @@ setup(
         'redis==3.3.5',
         'marshmallow==2.19.5',
         'boto3==1.9.251',
-        'pyyaml',
+        'pyyaml==5.1.2',
     ],
     entry_points={
         'console_scripts': [
