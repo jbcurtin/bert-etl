@@ -109,6 +109,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
         memory_size: int = bert_shortcuts.get_if_exists('memory_size', '128', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         if int(memory_size / 64) != memory_size / 64:
             raise bert_exceptions.BertConfigError(f'MemorySize[{memory_size}] must be a multiple of 64')
+        min_proced_items: int = bert_shortcuts.get_if_exists('min_proced_items', '25', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
 
         # iam
         iam_execution_role_arn: str = bert_shortcuts.get_if_exists(
@@ -233,7 +234,8 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                         'space': job.parent_space,
                         'work-key': job.parent_func_work_key,
                         'done-key': job.parent_func_done_key,
-                    }
+                    },
+                    'min_proced_items': min_proced_items
                 },
                 'encoding': {
                     'identity_encoders': identity_encoders,

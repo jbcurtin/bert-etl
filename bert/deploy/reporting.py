@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 TABLE_NAME: str = 'bert-etl-reporting'
 PWN: typing.TypeVar = typing.TypeVar('PWN')
 MONITOR_NAME: str = 'bert-etl-monitor'
-MIN_PROCED_ITEMS: int = 4
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +78,7 @@ def monitor_function_progress(module_name: str = None) -> None:
                     logger.info(f"Restarting Job[{job_name}]")
 
                     if conf['spaces']['pipeline-type'] == bert_constants.PipelineType.CONCURRENT:
-                        for idx in range(0, (len(procd_jobs) - MIN_PROCED_ITEMS) * -1):
+                        for idx in range(0, (len(procd_jobs) - conf['spaces']['min_proced_items']) * -1):
                             lambda_client.invoke(FunctionName=job_name, InvocationType='Event', Payload=b'{}')
 
                     elif conf['spaces']['pipeline-type'] == bert_constants.PipelineType.BOTTLE:
