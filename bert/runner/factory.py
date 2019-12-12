@@ -21,6 +21,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-m', '--module-name', required=True, help='https://bert-etl.readthedocs.io/en/latest/module_name.html')
     parser.add_argument('-n', '--function-name', type=str, default=None)
     parser.add_argument('-f', '--flush-db', action='store_true', default=False)
+    parser.add_argument('-w', '--web-service', action='store_true', default=False)
     return parser.parse_args()
 
 
@@ -33,6 +34,16 @@ def handle_signal(sig, frame):
   else:
     logger.info(f'Unhandled Signal[{sig}]')
 
+def start_webservice(options: argparse.Namespace) -> None:
+    if options.flush_db:
+        bert_utils.flush_db()
+
+    jobs = bert_utils.scan_jobs(options.module_name)
+    jobs = bert_utils.map_jobs(jobs, options.module_name)
+
+    signal.signal(signal.SIGINT, handle_signal)
+    from bert.webservice import manager
+    manager.run_webservice(options, jobs)
 
 def start_service(options: argparse.Namespace) -> None:
     if options.flush_db:
@@ -49,7 +60,11 @@ def run_from_cli():
     import sys, os
     sys.path.append(os.getcwd())
     options = capture_options()
-    start_service(options)
+    if options.web_service:
+        start_webservice(options)
+
+    else:
+        start_service(options)
 
 if __name__ in ['__main__']:
     run_from_cli()
