@@ -1224,6 +1224,7 @@ def destroy_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
                     api_gateway_client.delete_rest_api(restApiId=rest_api['id'])
 
 def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
+    logger.info(f'Creating API Deployment')
     lambda_client = boto3.client('lambda')
     api_gateway_client = boto3.client('apigateway')
     for job_name, conf in jobs.items():
@@ -1291,7 +1292,6 @@ def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
             Principal='apigateway.amazonaws.com',
             SourceArn=source_arn)
 
-
-        import ipdb; ipdb.set_trace()
-        pass
+    url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/dev/handle_request'
+    logger.info(f'Execution URL[{url}]')
 
