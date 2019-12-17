@@ -219,6 +219,16 @@ def %(job_name)s_manager(event: typing.Dict[str, typing.Any] = {}, context: 'lam
 
 def %(job_name)s_api_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
     with bert_reporting.track_execution(%(job_name)s):
+        bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
+        work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
+        work_queue.local_put({
+            'identity': {'S': 'api-gateway'},
+            'datum': {
+                'M': bert_encoders.encode_object({
+                    'lambda-event': event,
+                })
+            }
+        })
         return {
             # 'isBase64Encoded': False,
             'statusCode': 200,

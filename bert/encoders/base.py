@@ -43,6 +43,9 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
         return 'M'
 
+    elif datum is None:
+        return 'S'
+
     raise NotImplementedError(f'Unable to encode[{type(datum)}] datum[{datum}]')
 
 def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
@@ -72,6 +75,9 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
 
     elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
         return encode_aws_object(datum._payload)
+
+    elif datum is None:
+        return 'null:'
 
     else:
         raise NotImplementedError
@@ -110,6 +116,9 @@ def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
 
         elif encoding_type == 'S' and encoded[:6] == 'float:':
             return float(encoded.split(':', 1)[1])
+
+        elif encoding_type == 'S' and encoded[:5] == 'null:':
+            return None
 
         elif encoding_type == 'S':
             return encoded
