@@ -146,6 +146,19 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             bert_configuration.get('every_lambda', {'events':{}}),
             bert_configuration.get(job_name, {'events': {}}))
 
+        api_stage: str = bert_shortcuts.get_if_exists(
+            'api.stage', None, str,
+            bert_configuration.get('every_lambda', {'api': {}}),
+            bert_configuration.get(job_name, {'api': {}}))
+
+        api = getattr(job, '_api', None)
+        if api is None:
+            api_path: str = f'{job_name}.json'
+            api_method: str = 'get'
+
+        else:
+            api_path: str = api.route.route.strip('/')
+            api_method: str = api.method.value
 
         batch_size: int = bert_shortcuts.get_if_exists('batch_size', '100', int,
             bert_configuration.get('every_lambda', {}),
@@ -166,7 +179,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
 
-        if job.pipeline_type is bert_constants.PipelineType.BOTTLE and job.parent_noop_space == False:
+        if not api_stage is None:
+            job_handler = f'{job.func_space}.{job_name}_api_handler'
+
+        elif job.pipeline_type is bert_constants.PipelineType.BOTTLE and job.parent_noop_space == False:
             job_handler = f'{job.func_space}.{job_name}_manager'
 
         else:
@@ -218,6 +234,12 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                     'sns-topic-arn': sns_topic_arn,
                     # "cron(0 20 * * ? *)" or "rate(5 minutes)"
                     # 'rate': 'rate(5 minutes)',
+                },
+                'api': {
+                    'stage': api_stage,
+                    'name': f'{job_name}-rest-api',
+                    'path': api_path,
+                    'method': api_method,
                 },
                 'bottle': {
                     'schedule-expression': bottle_schedule_expression,
