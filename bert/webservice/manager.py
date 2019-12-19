@@ -35,10 +35,10 @@ def run_webservice(options: argparse.Namespace, jobs: typing.Dict[str, 'conf']) 
         if api:
             if execution_role_arn is None:
                 with bert_datasource.ENVVars(conf['runner']['environment']):
-                    handler.serve_handler(api, conf['job'])
+                    handler.serve_handler(api, conf['job'], conf['api']['stage'])
 
             else:
                 with bert_aws.assume_role(execution_role_arn):
                     with bert_datasource.ENVVars(conf['runner']['environment']):
-                        handler.serve_handler(api, conf['job'])
+                        handler.serve_handler(api, conf['job'], conf['api']['stage'])
 

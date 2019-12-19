@@ -1302,6 +1302,8 @@ def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
             Principal='apigateway.amazonaws.com',
             SourceArn=source_arn)
 
-    url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/dev/handle_request'
+    stage: str = conf['api']['stage']
+    route: str = conf['api']['path']
+    url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
     logger.info(f'Execution URL[{url}]')
 

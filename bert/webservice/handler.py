@@ -25,12 +25,12 @@ class HTTPHandler(socketserver.BaseRequestHandler):
             'route': self._api.route.route,
         })
         # import ipdb; ipdb.set_trace()
-        self._func()
+        response = self._func()
 
         # Response
         current_date: str = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
         try:
-            body: str = json.dumps(next(done_queue))
+            body: str = json.dumps(response)
         except StopIteration:
             body: str = '{}'
 
@@ -95,8 +95,10 @@ Server: noop
         method, path, protocol = request.split(b'\r\n', 1)[0].decode('utf-8').lower().split(' ')
         logger.info(f'Message Recieved[{method}:{path}]')
         if method == self._api.method.value:
-            if path == self._api.route.route:
+            full_path: str = f'/{self._stage}{self._api.route.route}'
+            if path == full_path:
                 self._send_response()
+                logger.info(f'Run Background Tasks')
 
             else:
                 self._invalid_path(path, self._api.route.route)
@@ -104,7 +106,7 @@ Server: noop
         else:
             self._invalid_method(method, self._api.method.value)
 
-def serve_handler(api: api.API, func: types.FunctionType) -> None:
+def serve_handler(api: api.API, func: types.FunctionType, stage: str) -> None:
     WWW_HOST: str = os.environ.get('WWW_HOST', '127.0.0.1')
     try:
         WWW_PORT: int = int(os.environ.get('WWW_PORT', 8000))
@@ -113,6 +115,8 @@ def serve_handler(api: api.API, func: types.FunctionType) -> None:
 
     HTTPHandler._api = api
     HTTPHandler._func = func
+    HTTPHandler._stage = stage
+    logger.info(f'Routing URL[{api.method}: /{stage}{api.route.route}]')
     with socketserver.TCPServer((WWW_HOST, WWW_PORT), HTTPHandler) as server:
         server.serve_forever()
 

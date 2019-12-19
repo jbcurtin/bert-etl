@@ -151,9 +151,12 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             bert_configuration.get('every_lambda', {'api': {}}),
             bert_configuration.get(job_name, {'api': {}}))
 
+        if api_stage is None:
+            raise bert_exceptions.BertConfigError(f'Stage not found in bert-etl file for job[{job_name}]')
+
         api = getattr(job, '_api', None)
         if api is None:
-            api_path: str = f'{job_name}.json'
+            api_path: str = f'{job_name}'
             api_method: str = 'get'
 
         else:
