@@ -6,6 +6,7 @@ import inspect
 import json
 import os
 import shutil
+import tarfile
 import tempfile
 import time
 import types
@@ -820,7 +821,6 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 'ZipFile': open(conf['aws-build']['archive-path'], 'rb').read()
             }
 
-
         try:
             client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
         except (ClientError, client.exceptions.ResourceNotFoundException) as err:
@@ -833,7 +833,8 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 Handler=conf['aws-deploy']['handler'],
                 Code=code_config,
                 Timeout=conf['aws-deploy']['timeout'],
-                Environment={'Variables': conf['aws-deploy']['environment']})
+                Environment={'Variables': conf['aws-deploy']['environment']},
+                Layers=conf['aws-deploy']['layers'])
             conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
 
         else:
@@ -848,7 +849,7 @@ def create_lambdas(jobs: typing.Dict[str, typing.Any]) -> None:
                 Code=code_config,
                 Timeout=conf['aws-deploy']['timeout'],
                 Environment={'Variables': conf['aws-deploy']['environment']},
-            )
+                Layers=conf['aws-deploy']['layers'])
             conf['aws-deployed']['aws-lambda'] = client.get_function(FunctionName=conf['aws-deploy']['lambda-name'])['Configuration']
 
 def create_lambda_concurrency(jobs: typing.Dict[str, typing.Any]) -> None:
@@ -1238,6 +1239,9 @@ def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
     lambda_client = boto3.client('lambda')
     api_gateway_client = boto3.client('apigateway')
     for job_name, conf in jobs.items():
+        if conf['api']['stage'] == None:
+            continue
+
         rest_api_response = api_gateway_client.create_rest_api(
             name=conf['api']['name'],
             description=conf['api']['name'],
@@ -1302,8 +1306,8 @@ def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
             Principal='apigateway.amazonaws.com',
             SourceArn=source_arn)
 
-    stage: str = conf['api']['stage']
-    route: str = conf['api']['path']
-    url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
-    logger.info(f'Execution URL[{url}]')
+        stage: str = conf['api']['stage']
+        route: str = conf['api']['path']
+        url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
+        logger.info(f'Execution URL[{url}]')
 

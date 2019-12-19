@@ -28,6 +28,19 @@ def head_bucket_for_existance(bucket_name: str) -> None:
         if '(403)' in err.args[0]:
             raise bert_exceptions.AWSError(f'Bucket[{bucket_name}] name is taken by someone else')
 
+def obtain_packages(bert_configuration: typing.Any) -> collections.namedtuple:
+    binary_def = collections.namedtuple('Binary', ['path', 'name'])
+    binary_paths: typing.List[binary_def] = []
+
+    for job_name, conf in bert_configuration.items():
+        if job_name.lower() == 'deployment':
+            continue
+
+        for entry in conf.get('binary_paths', []):
+            binary_paths.append(binary_def(entry['local_path'], entry['binary_name']))
+
+    return binary_paths
+
 def obtain_secrets_config(bert_configuration: typing.Any) -> collections.namedtuple:
     defaults = {
         'key_alias': 'bert-etl',

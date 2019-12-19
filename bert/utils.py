@@ -91,6 +91,16 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             [])
         invoke_args: typing.List[typing.Dict[str, typing.Any]] = bert_shortcuts.load_invoke_args(invoke_args)
 
+        binary_paths: typing.List[str] = bert_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'binary_paths': []}).get('binary_paths', []),
+            bert_configuration.get(job_name, {'binary_paths': []}).get('binary_paths', []),
+            [])
+
+        layers: typing.List[str] = bert_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'layers': []}).get('layers', []),
+            bert_configuration.get(job_name, {'layers': []}).get('layers', []),
+            [])
+
         # This ENVVar will exist when the bert-etl-monitor function is deployed to AWS Lambda. bert-etl-monitor is a 
         #  utility function and doesn't require any additional packages, encoders or decoders.
         if not os.environ.get('BERT_MODULE_NAME', None) is None:
@@ -150,16 +160,14 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             'api.stage', None, str,
             bert_configuration.get('every_lambda', {'api': {}}),
             bert_configuration.get(job_name, {'api': {}}))
-
-        if api_stage is None:
-            raise bert_exceptions.BertConfigError(f'Stage not found in bert-etl file for job[{job_name}]')
+        api_path: str = None
+        api_method: str = None
 
         api = getattr(job, '_api', None)
-        if api is None:
-            api_path: str = f'{job_name}'
-            api_method: str = 'get'
+        if not api is None:
+            if api_stage is None:
+                raise bert_exceptions.BertConfigError(f'Stage not found in bert-etl file for job[{job_name}]')
 
-        else:
             api_path: str = api.route.route.strip('/')
             api_method: str = api.method.value
 
@@ -214,6 +222,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                     'batch-size-delay': batch_size_delay,
                     'concurrency-limit': concurrency_limit,
                     'invoke-args': invoke_args,
+                    'layers': layers,
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),

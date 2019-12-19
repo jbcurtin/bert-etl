@@ -203,7 +203,7 @@ class LocalQueue(DynamodbQueue):
     # Share the memory across invocations, within the same process/thread. This allows for
     #   comm_binders to be called multipule-times and still pull from the same queue
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
-    def __init__(self: PWN, key: str, pipeline_type: bert_constants.PipelineType) -> None:
+    def __init__(self: PWN, key: str) -> None:
         self._key = key
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
