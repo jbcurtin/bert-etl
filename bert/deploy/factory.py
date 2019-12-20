@@ -34,6 +34,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-m', '--module-name', default='bert')
     parser.add_argument('-f', '--flush', default=False, action="store_true")
     parser.add_argument('-d', '--dry-run', default=False, action="store_true", help="Create the lambda functions and output ./lambdas without deploying to AWS")
+    parser.add_argument('-g', '--rebuild-api-gateway', default=False, action="store_true")
     parser.add_argument('-t', '--run-monitor', default=False, action="store_true", help="Run Monitor function locally")
     return parser.parse_args()
 
@@ -78,7 +79,9 @@ def deploy_service(options) -> None:
         bert_deploy_utils.destroy_lambda_to_table_bindings(jobs)
         bert_deploy_utils.destroy_lambda_concurrency(jobs)
         bert_deploy_utils.destroy_sns_topic_lambdas(jobs)
-        bert_deploy_utils.destroy_api_endpoints(jobs)
+        if options.rebuild_api_gateway:
+            bert_deploy_utils.destroy_api_endpoints(jobs)
+
         bert_deploy_utils.destroy_lambdas(jobs)
         if options.flush:
             bert_deploy_utils.destroy_dynamodb_tables(jobs)

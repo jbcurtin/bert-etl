@@ -1234,80 +1234,147 @@ def destroy_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
                 if rest_api['name'] == conf['api']['name']:
                     api_gateway_client.delete_rest_api(restApiId=rest_api['id'])
 
+
+def _find_api(name: str) -> str:
+    api_gateway_client = boto3.client('apigateway')
+    for page in api_gateway_client.get_paginator('get_rest_apis').paginate():
+        for item in page['items']:
+            if item['name'] == name:
+                return item['id']
+
+    return None
+
+def _find_api_resource_id(rest_api_id: str, parent_id: str, path_part: str) -> str:
+    api_gateway_client = boto3.client('apigateway')
+    assert not parent_id is None
+    assert not path_part is None
+    for page in api_gateway_client.get_paginator('get_resources').paginate(restApiId=rest_api_id):
+        for item in page['items']:
+            if item.get('pathPart', None) == path_part and item.get('parentId', None) == parent_id:
+                return item['id']
+
+    return None
+
+def _create_full_api(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
+    import ipdb; ipdb.set_trace()
+    pass
+    logger.info(f'Creating API Deployment[{conf["api"]["name"]}]')
+    rest_api_response = api_gateway_client.create_rest_api(
+        name=conf['api']['name'],
+        description=conf['api']['name'],
+        version='0.0.1',
+        binaryMediaTypes=[],
+        endpointConfiguration={
+            'types': ['REGIONAL'],
+            'vpcEndpointIds': []
+        },
+    )
+    root_resource = [item for item in api_gateway_client.get_resources(restApiId=rest_api_response['id'])['items'] if item['path'] == '/'][0]
+    resource_response = api_gateway_client.create_resource(
+        restApiId=rest_api_response['id'],
+        parentId=root_resource['id'],
+        pathPart=conf['api']['path'])
+
+    method_response = api_gateway_client.put_method(
+        restApiId=rest_api_response['id'],
+        resourceId=resource_response['id'],
+        httpMethod=conf['api']['method'].upper(),
+        authorizationType='NONE')
+
+    method_response_response = api_gateway_client.put_method_response(
+        restApiId=rest_api_response['id'],
+        resourceId=resource_response['id'],
+        httpMethod=conf['api']['method'].upper(),
+        statusCode='200',
+        responseModels={
+            'application/json': 'Empty'
+        })
+
+    lambda_arn: str = lambda_client.get_function(FunctionName=job_name)['Configuration']['FunctionArn']
+    lambda_uri: str = f'arn:aws:apigateway:{region_name}:lambda:path/2015-03-31/functions/{lambda_arn}/invocations'
+    integration_response = api_gateway_client.put_integration(
+        restApiId=rest_api_response['id'],
+        resourceId=resource_response['id'],
+        httpMethod=conf['api']['method'].upper(),
+        uri=lambda_uri,
+        type='AWS_PROXY',
+        integrationHttpMethod='POST')
+
+    api_gateway_client.put_integration_response(
+        restApiId=rest_api_response['id'],
+        resourceId=resource_response['id'],
+        httpMethod=conf['api']['method'].upper(),
+        statusCode='200',
+        responseTemplates={
+            'application/json': ''
+        })
+
+    deployment_response = api_gateway_client.create_deployment(
+        restApiId=rest_api_response['id'],
+        stageName=conf['api']['stage'])
+
+    account_id: str = boto3.client('sts').get_caller_identity().get('Account')
+    source_arn = f'arn:aws:execute-api:{region_name}:{account_id}:{rest_api_response["id"]}/*/*/{conf["api"]["path"]}'
+    lambda_client.add_permission(
+        FunctionName=job_name,
+        StatementId=f'{job_name}-api-gateway-invoke',
+        Action='lambda:InvokeFunction',
+        Principal='apigateway.amazonaws.com',
+        SourceArn=source_arn)
+
+
+def _rebuild_api_lambda(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
+    api_gateway_client = boto3.client('apigateway')
+    lambda_client = boto3.client('lambda')
+    rest_api_id = _find_api(conf['api']['name'])
+    root_resource = [item for item in api_gateway_client.get_resources(restApiId=rest_api_id)['items'] if item['path'] == '/'][0]
+    region_name: str = boto3.session.Session().region_name
+    account_id: str = boto3.client('sts').get_caller_identity().get('Account')
+    source_arn = f'arn:aws:execute-api:{region_name}:{account_id}:{rest_api_id}/*/*/{conf["api"]["path"]}'
+    lambda_arn: str = lambda_client.get_function(FunctionName=job_name)['Configuration']['FunctionArn']
+    lambda_uri: str = f'arn:aws:apigateway:{region_name}:lambda:path/2015-03-31/functions/{lambda_arn}/invocations'
+    resource_id = _find_api_resource_id(rest_api_id, root_resource['id'], conf['api']['path'])
+    integration_response = api_gateway_client.put_integration(
+        restApiId=rest_api_id,
+        resourceId=resource_id,
+        httpMethod=conf['api']['method'].upper(),
+        uri=lambda_uri,
+        type='AWS_PROXY',
+        integrationHttpMethod='POST')
+
+    api_gateway_client.put_integration_response(
+        restApiId=rest_api_id,
+        resourceId=resource_id,
+        httpMethod=conf['api']['method'].upper(),
+        statusCode='200',
+        responseTemplates={
+            'application/json': '',
+        })
+    lambda_client.add_permission(
+        FunctionName=job_name,
+        StatementId=f'{job_name}-api-gateway-invoke',
+        Action='lambda:InvokeFunction',
+        Principal='apigateway.amazonaws.com',
+        SourceArn=source_arn)
+
+
 def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
-    logger.info(f'Creating API Deployment')
     lambda_client = boto3.client('lambda')
     api_gateway_client = boto3.client('apigateway')
     for job_name, conf in jobs.items():
         if conf['api']['stage'] == None:
             continue
 
-        rest_api_response = api_gateway_client.create_rest_api(
-            name=conf['api']['name'],
-            description=conf['api']['name'],
-            version='0.0.1',
-            binaryMediaTypes=[],
-            endpointConfiguration={
-                'types': ['REGIONAL'],
-                'vpcEndpointIds': []
-            },
-        )
-        root_resource = [item for item in api_gateway_client.get_resources(restApiId=rest_api_response['id'])['items'] if item['path'] == '/'][0]
-        resource_response = api_gateway_client.create_resource(
-            restApiId=rest_api_response['id'],
-            parentId=root_resource['id'],
-            pathPart=conf['api']['path'])
+        rest_api_id = _find_api(conf['api']['name'])
+        if rest_api_id:
+            _rebuild_api_lambda(job_name, conf)
 
-        method_response = api_gateway_client.put_method(
-            restApiId=rest_api_response['id'],
-            resourceId=resource_response['id'],
-            httpMethod=conf['api']['method'].upper(),
-            authorizationType='NONE')
-
-        method_response_response = api_gateway_client.put_method_response(
-            restApiId=rest_api_response['id'],
-            resourceId=resource_response['id'],
-            httpMethod=conf['api']['method'].upper(),
-            statusCode='200',
-            responseModels={
-                'application/json': 'Empty'
-            })
-
-        region_name: str = boto3.session.Session().region_name
-        lambda_arn: str = lambda_client.get_function(FunctionName=job_name)['Configuration']['FunctionArn']
-        lambda_uri: str = f'arn:aws:apigateway:{region_name}:lambda:path/2015-03-31/functions/{lambda_arn}/invocations'
-        integration_response = api_gateway_client.put_integration(
-            restApiId=rest_api_response['id'],
-            resourceId=resource_response['id'],
-            httpMethod=conf['api']['method'].upper(),
-            uri=lambda_uri,
-            type='AWS_PROXY',
-            integrationHttpMethod='POST')
-
-        api_gateway_client.put_integration_response(
-            restApiId=rest_api_response['id'],
-            resourceId=resource_response['id'],
-            httpMethod=conf['api']['method'].upper(),
-            statusCode='200',
-            responseTemplates={
-                'application/json': ''
-            })
-
-        deployment_response = api_gateway_client.create_deployment(
-            restApiId=rest_api_response['id'],
-            stageName=conf['api']['stage'])
-
-        account_id: str = boto3.client('sts').get_caller_identity().get('Account')
-        source_arn = f'arn:aws:execute-api:{region_name}:{account_id}:{rest_api_response["id"]}/*/*/{conf["api"]["path"]}'
-        lambda_client.add_permission(
-            FunctionName=job_name,
-            StatementId=f'{job_name}-api-gateway-invoke',
-            Action='lambda:InvokeFunction',
-            Principal='apigateway.amazonaws.com',
-            SourceArn=source_arn)
+        else:
+            _create_full_api(job_name, conf)
 
         stage: str = conf['api']['stage']
         route: str = conf['api']['path']
-        url: str = f'https://{rest_api_response["id"]}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
-        logger.info(f'Execution URL[{url}]')
+        region_name: str = boto3.session.Session().region_name
+        url: str = f'https://{rest_api_id}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
+        logger.info(f'Deployment Execution URL[{url}]')
 

@@ -37,7 +37,7 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.4.62'
+version = '0.4.66'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):

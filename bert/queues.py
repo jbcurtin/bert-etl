@@ -190,7 +190,8 @@ class StreamingQueue(DynamodbQueue):
         try:
             value: QueueItem = self._queue.pop(0)
         except IndexError:
-            return super(StreamingQueue, self).get()
+            # return super(StreamingQueue, self).get()
+            return None
 
         else:
             return value
@@ -205,6 +206,7 @@ class LocalQueue(DynamodbQueue):
     _queue: typing.List[typing.Dict[str, typing.Any]] = []
     def __init__(self: PWN, key: str) -> None:
         self._key = key
+        self._value = None
 
     def local_put(self: PWN, record: typing.Dict[str, typing.Any]) -> None:
         self._queue.append(copy.deepcopy(record))
