@@ -10,6 +10,9 @@ At its core, `bert-etl` uses Dynamodb Streams to communicate between lambda func
 
 At this moment in time, there are no plans to attach API Gateway to `bert-etl.yaml` because there is already great software(like `zappa`) that does this.
 
+## Warning: aws-lambda deploy target still considered beta
+
+`bert-etl` ships with a deploy target to `aws-lambda`. This feature isn't very well documented yet, and has quite a bit of work to de done so it may function more consistently. Be aware that deploying te `aws-lambda` is a product ran and controlled by AWS. If you incure charges using `bert-etl` while utilizing `aws-lambda`, you may not consider us responsible. `bert-etl` is offered under `MIT` license which includes a `Use at your own risk` clause.
 
 ## Begin with
 
