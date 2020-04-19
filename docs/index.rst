@@ -7,10 +7,10 @@ A microframework for simple ETL solutions
 Engineer Oriented API Design
 ----------------------------
 
-Concurrent Processing in any language can be hazardous. Like many other programming and scripting languages out there,
-Python has its own limitations the Engineer must overcome in order to process data in parallel. `bert-etl` attempts to
-abstract away concurrency as much as possible. Instead assuming the Engineer writing code knows that the function
-they're writing follows a few simple concepts
+Concurrent Processing in any language can be hazardous. Like many programming and scripting languages out there,
+Python has its limitations. Engineers learn to understand these limitations in order to process data in parallel. 
+`bert-etl` attempts to abstract away concurrency as much as possible. Instead assuming the Engineer writing code follows
+these simple concepts instead of writing boiler-plate logic
 
 
 Pure Functions
@@ -22,7 +22,7 @@ In compute programming, a pure function is a function that has the following pro
 * Its evaluation has no side effects
 
 
-The simplist Pure Function to be written could be,
+The simplist form of a Pure Function could be written as,
 
 .. code-block:: python
 
@@ -32,10 +32,10 @@ The simplist Pure Function to be written could be,
 Stream Processing
 #################
 
-Using stream processing, calculations, alterations, mutations, and variations can be abstracted away into functions that
-alter the `state` of the data. `bert-etl` treats every function as its own namespace. Python, Logic, and Data is all
+Using stream processing, calculations, and variations can be abstracted away into functions that
+alter data. `bert-etl` treats every function as its own isolated environment. Python, Logic, and Data is all
 considered unique in the context of a Function Execution. This allows for random-interval data calculations, while
-maintaining sequential order of Function Execution
+maintaining sequential order of Function Executions
 
 .. code-block:: python
 
@@ -61,8 +61,8 @@ maintaining sequential order of Function Execution
             done_queue.put(details)
 
     @binding.follow(calculate_data, pipeline_type=constants.PipelineType.CONCURRENT)
-    def variation():
-        work_queue, done_queue, ologger = utils.comm_binders(variation)
+    def show_variation():
+        work_queue, done_queue, ologger = utils.comm_binders(show_variation)
 
         for details in work_queue:
             for key, value in details.keys():
@@ -72,8 +72,8 @@ maintaining sequential order of Function Execution
 Easily Debug without Logging
 ############################
 
-`bert-etl` encourages the use of using your favorite debugger. Today, `pdb`, and `ipdb` are know to be able to 
-work within Function Execution context
+`bert-etl` encourages the use of your favorite debugger. Today, `pdb`, and `ipdb` are know to be able to 
+work within Pure Functions written for `bert-etl`
 
 .. code-block:: python
 
@@ -96,15 +96,15 @@ work within Function Execution context
             ologger.info(f'Idx: {details["idx"]}')
 
 
-Encouraging this API provides for a very powerful debugging experiance. When ready to test code in a concurrent manor,
+Encouraging this API provides for very powerful debugging experiances. When ready to test code in a concurrent manor,
 set an Environment Variable `DEBUG=False` and invoke `bert-runner.py`
 
 
 bert-runner.py
 ##############
 
-`bert-runner.py` provides an execution context that'll run `bert-etl` jobs in sequence, one-function at a time or
-concurrently on local hardware using Python multiprocessing module. Data is shared between Function Executions through
+`bert-runner.py` provides an invocation that'll run Bert ETL Jobs in sequence, one-function at a time or
+concurrently on local hardware using Python `multiprocessing` module. Data is shared between Function Executions with
 Redis_
 
 .. _Redis: https://redis.io/
@@ -119,7 +119,7 @@ the example from Github
     $ cd /tmp/tess-exoplanet-search
     $ DEBUG=False bert-runner.py -m tess_exoplanet_search -f
 
-You can view a list of example projects using `bert-example.py`
+Using `bert-example.py` to view a list of available example projects
 
 .. code-block:: bash
 
