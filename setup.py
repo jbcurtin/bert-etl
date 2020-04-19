@@ -37,7 +37,9 @@ version of Python
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-version = '0.4.66'
+with open('VERSION', 'r') as stream:
+    version = stream.read()
+
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -65,9 +67,11 @@ setup(
         'marshmallow==2.19.5',
         'boto3==1.9.251',
         'pyyaml==5.1.2',
+        'GitPython==3.1.1',
     ],
     entry_points={
         'console_scripts': [
+            'bert-example.py = bert.example.factory:run_from_cli',
             'bert-deploy.py = bert.deploy.factory:run_from_cli',
             'bert-runner.py = bert.runner.factory:run_from_cli',
             'bert-secrets.py = bert.secrets.factory:run_from_cli',

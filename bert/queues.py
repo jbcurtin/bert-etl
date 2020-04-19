@@ -67,7 +67,7 @@ class BaseQueue:
 
     def __next__(self) -> typing.Any:
         if not self._value is None:
-            logger.info('Destroying Value')
+            logger.debug('Destroying Value')
             self._destroy(self._value)
             self._value = None
 

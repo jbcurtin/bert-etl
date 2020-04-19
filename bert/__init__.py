@@ -1,7 +1,7 @@
 import logging
 import typing
 
-logger = logging.getLogger('') # <--- Probable a good idea to name your logger. '' is the 'root' logger
+logger = logging.getLogger('')
 sysHandler = logging.StreamHandler()
 sysHandler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(sysHandler)
