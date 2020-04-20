@@ -14,8 +14,8 @@ Engineer writing code to follow these simple concepts instead of having to write
 Pythons' Concurrent Processing Models
 
 
-Pure Functions
-##############
+Pure Function
+#############
 
 In compute programming, a pure function is a function that has the following properties
 
@@ -29,6 +29,7 @@ The simplist form of a Pure Function could be written as,
 
     def add(*args: 'args') -> int:
         return sum(args)
+
 
 Stream Processing
 #################
@@ -131,4 +132,5 @@ Using `bert-example.py` to view a list of available example projects
 
     commands/index.rst
     features/index.rst
+    concepts/index.rst
 
