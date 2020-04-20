@@ -32,7 +32,7 @@ The simplist form of a Pure Function could be written as,
 Stream Processing
 #################
 
-Using stream processing, calculations, and variations can be abstracted away into functions that
+Using stream processing, calculations and variations can be abstracted away into functions that
 alter data. `bert-etl` treats every function as its own isolated environment. Python, Logic, and Data is all
 considered unique in the context of a Function Execution. This allows for random-interval data calculations, while
 maintaining sequential order of Function Executions
