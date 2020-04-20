@@ -4,8 +4,8 @@ bert-etl
 
 A microframework for simple ETL solutions
 
-Engineer Oriented API Design
-----------------------------
+Engineer First API Design
+-------------------------
 
 Concurrent Processing in any language can be hazardous. Like many programming and scripting languages out there,
 Python has its limitations. Engineers learn to understand these limitations in order to process data in parallel. 
@@ -72,8 +72,8 @@ maintaining sequential order of Function Executions
 Easily Debug without Logging
 ############################
 
-`bert-etl` encourages the use of your favorite debugger. Today, `pdb`, and `ipdb` are know to be able to 
-work within Pure Functions written for `bert-etl`
+`bert-etl` encourages the use of your favorite debugger. Today, `pdb`, and `ipdb` are knowen to work within
+Function Executions
 
 .. code-block:: python
 
@@ -96,20 +96,20 @@ work within Pure Functions written for `bert-etl`
             ologger.info(f'Idx: {details["idx"]}')
 
 
-Encouraging this API provides for very powerful debugging experiances. When ready to test code in a concurrent manor,
-set an Environment Variable `DEBUG=False` and invoke `bert-runner.py`
+Encouraging this kind of API provides for very powerful debugging experiences. When ready to test code in a concurrent
+manor, set an Environment Variable `DEBUG=False` and invoke `bert-runner.py`
 
 
 bert-runner.py
 ##############
 
-`bert-runner.py` provides an invocation that'll run Bert ETL Jobs in sequence, one-function at a time or
+`bert-runner.py` provides invocation that'll run Bert ETL Jobs in sequence, one-function at a time or
 concurrently on local hardware using Python `multiprocessing` module. Data is shared between Function Executions with
 Redis_
 
 .. _Redis: https://redis.io/
 
-Lets search for Exoplanets using `bert-runner.py` and with out local hardware after using `bert-example.py` to clone
+Lets search for Exoplanets using `bert-runner.py` with local hardware after using `bert-example.py` to clone
 the example from Github
 
 .. code-block:: bash
