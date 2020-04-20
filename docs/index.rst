@@ -8,9 +8,10 @@ Engineer First API Design
 -------------------------
 
 Concurrent Processing in any language can be hazardous. Like many programming and scripting languages out there,
-Python has its limitations. Engineers learn to understand these limitations in order to process data in parallel. 
-`bert-etl` attempts to abstract away concurrency as much as possible. Instead assuming the Engineer writing code follows
-these simple concepts instead of writing boiler-plate logic
+Python has its own Concurrent Processing Models. Engineers learn to understand these Concurrent Processing Models in
+order to process data in parallel. `bert-etl` attempts to abstract away concurrency as much as possible. Asking the
+Engineer writing code to follow these simple concepts instead of having to write boiler-plate logic for handling
+Pythons' Concurrent Processing Models
 
 
 Pure Functions
