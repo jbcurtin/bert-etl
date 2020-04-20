@@ -72,7 +72,7 @@ maintaining sequential order of Function Executions
 Easily Debug without Logging
 ############################
 
-`bert-etl` encourages the use of your favorite debugger. Today, `pdb`, and `ipdb` are knowen to work within
+`bert-etl` encourages the use of your favorite debugger. Today, `pdb`, and `ipdb` are known to work within
 Function Executions
 
 .. code-block:: python
@@ -109,8 +109,7 @@ Redis_
 
 .. _Redis: https://redis.io/
 
-Lets search for Exoplanets using `bert-runner.py` with local hardware after using `bert-example.py` to clone
-the example from Github
+Lets search for Exoplanets with `bert-runner.py` using local hardware
 
 .. code-block:: bash
 
