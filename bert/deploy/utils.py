@@ -1256,8 +1256,7 @@ def _find_api_resource_id(rest_api_id: str, parent_id: str, path_part: str) -> s
     return None
 
 def _create_full_api(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
-    import ipdb; ipdb.set_trace()
-    pass
+    api_gateway_client = boto3.client('apigateway')
     logger.info(f'Creating API Deployment[{conf["api"]["name"]}]')
     rest_api_response = api_gateway_client.create_rest_api(
         name=conf['api']['name'],
@@ -1290,6 +1289,7 @@ def _create_full_api(job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
             'application/json': 'Empty'
         })
 
+    lambda_client = boto3.client('lambda')
     lambda_arn: str = lambda_client.get_function(FunctionName=job_name)['Configuration']['FunctionArn']
     lambda_uri: str = f'arn:aws:apigateway:{region_name}:lambda:path/2015-03-31/functions/{lambda_arn}/invocations'
     integration_response = api_gateway_client.put_integration(

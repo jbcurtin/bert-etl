@@ -8,3 +8,7 @@ env-ops
 *.swp
 __pycache__
 *.pyc
+env-twine
+env-docs
+env-test
+env

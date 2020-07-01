@@ -113,6 +113,11 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
         bert_encoders.load_encoders_or_decoders(queue_encoders)
         bert_encoders.load_encoders_or_decoders(queue_decoders)
 
+        ignore_items: typing.List[str] = bert_shortcuts.merge_lists(
+            bert_configuration.get('every_lambda', {'ignore': []}).get('ignore', []),
+            bert_configuration.get(job_name, {'ignore': []}).get('ignore', []),
+            [])
+
         # concurrency_limit is checked against AWS account execution limit in bert.deploy.utils
         concurrency_limit: int = bert_shortcuts.get_if_exists('concurrency_limit', '0', int, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
         runtime: int = bert_shortcuts.get_if_exists('runtime', 'python3.6', str, bert_configuration.get('every_lambda', {}), bert_configuration.get(job_name, {}))
@@ -226,7 +231,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),
-                    'excludes': ZIP_EXCLUDES + COMMON_EXCLUDES,
+                    'excludes': ZIP_EXCLUDES + COMMON_EXCLUDES + ignore_items,
                     'path': os.path.join(os.getcwd(), 'lambdas', job_name),
                     'archive-path': os.path.join(os.getcwd(), 'lambdas', f'{job_name}.zip')
                 },
@@ -269,7 +274,7 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                         'work-key': job.parent_func_work_key,
                         'done-key': job.parent_func_done_key,
                     },
-                    'min_proced_items': min_proced_items
+                    'min_proced_items': min_proced_items,
                 },
                 'encoding': {
                     'identity_encoders': identity_encoders,
