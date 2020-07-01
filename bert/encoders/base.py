@@ -3,6 +3,7 @@ import types
 import typing
 
 from bert import constants
+from bert.encoders.datatypes import BertETLEncodingMap
 
 from datetime import datetime
 
@@ -18,7 +19,9 @@ class IdentityEncoder(json.JSONEncoder):
 
         return super(IdentityEncoder, self).default(obj)
 
-def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
+def _find_aws_encoding(
+        datum: typing.Any,
+        encoding_map: BertETLEncodingMap = None) -> typing.Dict[str, typing.Any]:
     if isinstance(datum, dict):
         return 'M'
 
@@ -46,18 +49,25 @@ def _find_aws_encoding(datum: typing.Any) -> typing.Dict[str, typing.Any]:
     elif datum is None:
         return 'S'
 
-    raise NotImplementedError(f'Unable to encode[{type(datum)}] datum[{datum}]')
+    else:
+        if encoding_map:
+            return encoding_map.find_aws_encoding(datum)
 
-def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
+    raise NotImplementedError
+    
+def encode_aws_object(
+        datum: typing.Any,
+        encoding_map: BertETLEncodingMap = None) -> typing.Dict[str, typing.Any]:
+
     if isinstance(datum, dict):
         for key, value in datum.items():
-            datum[key] = {_find_aws_encoding(value): encode_aws_object(value)}
+            datum[key] = {_find_aws_encoding(value, encoding_map): encode_aws_object(value, encoding_map)}
 
         return datum
 
     elif isinstance(datum, (list, tuple, types.GeneratorType)):
         for idx, value in enumerate(datum):
-            datum[idx] = {_find_aws_encoding(value): encode_aws_object(value)}
+            datum[idx] = {_find_aws_encoding(value, encoding_map): encode_aws_object(value, encoding_map)}
 
         return datum
 
@@ -74,27 +84,40 @@ def encode_aws_object(datum: typing.Any) -> typing.Dict[str, typing.Any]:
         return datum
 
     elif hasattr(datum, '_payload') and datum.__class__.__name__ == 'QueueItem':
-        return encode_aws_object(datum._payload)
+        return encode_aws_object(datum._payload, encoding_map)
 
     elif datum is None:
         return 'null:'
 
     else:
+        if encoding_map:
+            return encoding_map.encode_aws_object(datum)
+
         raise NotImplementedError
 
     return None
 
-def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
+def decode_aws_object(
+        datum: typing.Dict[str, typing.Any],
+        encoding_map: BertETLEncodingMap = None) -> typing.Any:
+
     for encoding_type, encoded in datum.items():
         if encoding_type == 'M':
-            for key, value, in encoded.items():
-                encoded[key] = decode_aws_object(value)
+            if BertETLEncodingMap.REF_KEY in encoded.keys():
+                if encoding_map is None:
+                    raise NotImplementedError(f'Encoding Map required to decode object')
 
-            return encoded
+                return encoding_map.resolve_signature(encoded)
+
+            else:
+                for key, value, in encoded.items():
+                    encoded[key] = decode_aws_object(value, encoding_map)
+
+                return encoded
 
         elif encoding_type == 'L':
             for idx, value in enumerate(encoded):
-                encoded[idx] = decode_aws_object(value)
+                encoded[idx] = decode_aws_object(value, encoding_map)
 
             return encoded
 
@@ -122,6 +145,10 @@ def decode_aws_object(datum: typing.Dict[str, typing.Any]) -> typing.Any:
 
         elif encoding_type == 'S':
             return encoded
+
+        else:
+            if encoding_map:
+                return encoding_map.decode_aws_object(encoding_type, encoded)
 
         return None
 

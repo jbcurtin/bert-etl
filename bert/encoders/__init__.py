@@ -84,7 +84,6 @@ def encode_object(obj: typing.Any) -> typing.Any:
     for encoder in QUEUE_ENCODERS:
         result = encoder(obj)
         logger.debug(f'Encoder[{encoder.__module__}:{encoder.__name__}] Result[{result}]')
-
         if result:
             return result
 
