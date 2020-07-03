@@ -78,5 +78,5 @@ class BertETLEncodingMap:
         if _class_type is None:
             raise NotImplementedError
 
-        return _class_type.Deserialize(datum)
+        return _class_type.Deserialize(datum).resolve()
 

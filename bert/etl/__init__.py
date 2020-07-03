@@ -7,6 +7,8 @@ import sync_utils
 import time
 import typing
 
+from bert.etl.constants import BERT_ETL_S3_PREFIX
+
 from botocore.exceptions import ClientError
 
 from urllib.parse import urlparse
@@ -25,7 +27,7 @@ class ETLState:
     }
     def _generate_s3_key(self: PWN, message: str) -> str:
         hashed_value = hashlib.sha256(message.encode(ENCODING)).hexdigest()
-        return f'etl-state/{hashed_value}.json'
+        return f'{BERT_ETL_S3_PREFIX}/etl-state/{hashed_value}.json'
 
     def __init__(self: PWN, url: str) -> None:
         self._s3_key = self._generate_s3_key(url)
@@ -57,6 +59,12 @@ class ETLState:
             value = ''.join(sorted(json.dumps(datum)))
             return hashlib.sha256(value.encode(ENCODING)).hexdigest()
 
+        elif isinstance(datum, (str,)):
+            return hashlib.sha256(datum.encode(ENCODING)).hexdigest()
+
+        elif isinstance(datum, (int, float, )):
+            return hashlib.sha256(str(datum).encode(ENCODING)).hexdigest()
+
         else:
             raise NotImplementedError(datum.__class__)
 
@@ -74,7 +82,6 @@ class ETLState:
     def clear(self: PWN) -> None:
         self._state = self.STATE_MODEL.copy()
         self._state_hash = self._generate_hash(self._state)
-
 
 class ETLDataset:
     def _clear_datasets(self: PWN):
@@ -112,7 +119,7 @@ class ETLDataset:
     def __init__(self: PWN, message: str) -> None:
         self._state = ETLState(message)
         self._hashed_message = hashlib.sha256(message.encode(ENCODING)).hexdigest()
-        self._prefix = f'etl-dataset/{self._hashed_message}'
+        self._prefix = f'{BERT_ETL_S3_PREFIX}/etl-dataset/{self._hashed_message}'
 
     def __enter__(self: PWN) -> PWN:
         self.localize()
@@ -156,12 +163,69 @@ class ETLDataset:
         self._update = True
         self._dataset.append(datum)
 
+class ETLDatasetReaderIterator:
+    def __init__(self: PWN, collection: typing.List[str]) -> None:
+        self._collection = collection
+        self._local_collection = []
+        self._idx = -1
+        self._max_idx = len(collection) - 1
+
+    def __iter__(self: PWN) -> str:
+        import pdb; pdb.set_trace()
+        return self
+
+    def __next__(self: PWN) -> typing.Dict[str, typing.Any]:
+        while True:
+            if len(self._local_collection) == 0:
+                self._idx += 1
+                try:
+                    s3_key = self._collection[self._idx]
+                except IndexError:
+                    raise StopIteration
+
+                self._local_collection.extend(sync_utils.download_dataset(s3_key, os.environ['DATASET_BUCKET'], list))
+
+            if len(self._local_collection) == 0:
+                raise StopIteration
+            
+            return self._local_collection.pop(0)
+
+
+class ETLDatasetReader:
+    def __init__(self: PWN, message: str) -> None:
+        self._state = ETLState(message)
+        self._hashed_message = hashlib.sha256(message.encode(ENCODING)).hexdigest()
+        self._prefix = f'{BERT_ETL_S3_PREFIX}/etl-dataset/{self._hashed_message}'
+
+    def __enter__(self: PWN) -> PWN:
+        self.consolidate()
+        return self
+
+    def __exit__(self: PWN, one, two, three) -> None:
+        pass
+
+    def consolidate(self: PWN) -> None:
+        s3_keys = []
+        for page_idx, page in enumerate(s3_client.get_paginator('list_objects_v2').paginate(Bucket=os.environ['DATASET_BUCKET'], RequestPayer=REQUEST_PAYER, Prefix=self._prefix)):
+            for content in page.get('Contents', []):
+                content_index = int(content['Key'].replace(self._prefix, '').strip('/').rsplit('.json', 1)[0])
+                s3_keys.append([content_index, content['Key']])
+
+        self._consolidated_s3_keys = [s3_key for s3_key_index, s3_key in sorted(s3_keys, key=lambda x: x[0], reverse=True)]
+        self._iterator = ETLDatasetReaderIterator(self._consolidated_s3_keys[:])
+
+    def __iter__(self: PWN) -> typing.Any:
+        return self._iterator
+
 
 class ETLReference:
     """ We may need to track this through the process to make sure it doesn't create a memory leak """
     REF_KEY: str = '_class_path_ref'
     def __init__(self: PWN, message: str) -> None:
         self._message = message
+
+    def resolve(self: PWN) -> ETLDataset:
+        return ETLDatasetReader(self._message)
 
     @classmethod
     def Serialize(cls: '_class_type', reference: PWN) -> typing.Dict[str, str]:
