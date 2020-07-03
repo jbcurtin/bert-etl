@@ -196,6 +196,7 @@ class ETLDatasetReader:
         self._state = ETLState(message)
         self._hashed_message = hashlib.sha256(message.encode(ENCODING)).hexdigest()
         self._prefix = f'{BERT_ETL_S3_PREFIX}/etl-dataset/{self._hashed_message}'
+        self._message = message
 
     def __enter__(self: PWN) -> PWN:
         self.consolidate()
@@ -216,6 +217,23 @@ class ETLDatasetReader:
 
     def __iter__(self: PWN) -> typing.Any:
         return self._iterator
+
+    REF_KEY: str = '_class_path_ref'
+    def resolve(self: PWN) -> PWN:
+        return self
+
+    @classmethod
+    def Serialize(cls: '_class_type', dataset_reader: PWN) -> typing.Dict[str, str]:
+        _class_path = f'{cls.__module__}.{cls.__name__}'
+        return {'message': dataset_reader._message, cls.REF_KEY: _class_path}
+
+    @classmethod
+    def Deserialize(cls: '_class_type', datum: typing.Dict[str, str]) -> PWN:
+        _class_path = f'{cls.__module__}.{cls.__name__}'
+        if datum.get(cls.REF_KEY, None) != _class_path:
+            raise NotImplementedError
+
+        return cls(datum['message'])
 
 
 class ETLReference:

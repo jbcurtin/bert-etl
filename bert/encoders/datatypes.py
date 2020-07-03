@@ -42,7 +42,7 @@ class BertETLEncodingMap:
 
     def decode_aws_object(self: PWN, encoding_type: str, encoded: typing.Any) -> None:
         import pdb; pdb.set_trace()
-        import sys; sys.exit(1)
+        raise NotImplementedError
 
     REF_KEY = 'bert-etl-encoding-map-signature'
     def sign(self: PWN, datum: typing.Any) -> typing.Any:
