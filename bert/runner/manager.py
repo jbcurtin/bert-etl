@@ -16,10 +16,26 @@ from bert import \
     aws as bert_aws
 
 from bert.runner import \
-    constants as runner_constants
+    constants as runner_constants, \
+    datatypes as runner_datatypes
 
 logger = logging.getLogger(__name__)
 STOP_DAEMON: bool = False
+
+def inject_cognito_event(conf: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+    event_defaults = runner_datatypes.CognitoEventDefaults(
+        clientId = conf['aws-deploy']['cognito']['client_id'],
+        userPoolId = conf['aws-deploy']['cognito']['user_pool_id'])
+
+    triggers = [member for member in runner_datatypes.CognitoTrigger if member.value in conf['aws-deploy']['cognito']['triggers']]
+    if len(triggers) < 0:
+        raise NotImplementedError(f'Cognito Event not found in bert-etl file.')
+
+    if len(triggers) > 1:
+        raise NotImplementedError(f'Cognito Events >1 not supported yet')
+
+    event = runner_datatypes.CognitoEvent(event_defaults)
+    return event.trigger_content(triggers[0])
 
 def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
@@ -35,6 +51,12 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             logger.info(f'Running Job[{job_name}] as [{conf["spaces"]["pipeline-type"]}]')
             execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
             job_worker_queue, job_done_queue, job_logger = bert_utils.comm_binders(conf['job'])
+
+            if options.cognito is True:
+                job_worker_queue.put({
+                    'cognito-event': inject_cognito_event(conf)
+                })
+
             for invoke_arg in conf['aws-deploy']['invoke-args']:
                 job_worker_queue.put(invoke_arg)
 
@@ -58,6 +80,11 @@ def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionT
             bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
 
             job_worker_queue, job_done_queue, job_logger = bert_utils.comm_binders(conf['job'])
+            if options.cognito is True:
+                job_worker_queue.put({
+                    'cognito-event': inject_cognito_event(conf)
+                })
+
             for invoke_arg in conf['aws-deploy']['invoke-args']:
                 job_worker_queue.put(invoke_arg)
 

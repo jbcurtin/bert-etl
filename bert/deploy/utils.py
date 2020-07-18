@@ -170,6 +170,14 @@ bert_encoders.load_queue_decoders(%(queue_decoders)s)
 
 %(job_source)s
 
+def cognito_handler_check(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> bool:
+    if event['triggerSource'] in ['TokenGeneration_Authentication', 'PostAuthentication_Authentication']:
+        return True
+
+    return False
+
+# 'lambda_context' details
+#   https://gist.github.com/gene1wood/c0d37dfcb598fc133a8c
 def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lambda_context' = None) -> None:
     with bert_reporting.track_execution(%(job_name)s):
         records: typing.List[typing.Dict[str, typing.Any]] = event.get('Records', [])
@@ -178,15 +186,24 @@ def %(job_name)s_handler(event: typing.Dict[str, typing.Any] = {}, context: 'lam
             bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
             work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
             for record in records:
+                # SNS
                 if record.get('EventSource', None) == 'aws:sns':
                     work_queue.local_put({'identity': {'S': 'sns-entry'}, 'datum': {'M': bert_encoders.encode_object(record['Sns'])}})
 
+                # Dynamodb
                 elif record.get('eventSource', None) == 'aws:dynamodb':
                     if record['eventName'].lower() == 'INSERT'.lower():
                         work_queue.local_put(record['dynamodb']['NewImage'])
 
                 else:
                     raise NotImplementedError(record['EventSource'])
+
+        elif cognito_handler_check(event, context):
+            bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
+            work_queue, done_queue, ologger = bert_utils.comm_binders(%(job_name)s)
+            work_queue.local_put({'identity': {'S': 'cognito'}, 'datum': {'M': bert_encoders.encode_object({'cognito-event': event.copy()})}})
+            event['response'] = %(job_name)s()
+            return event
 
         elif bert_inputs != None:
             bert_constants.QueueType = bert_constants.QueueTypes.StreamingQueue
@@ -589,7 +606,7 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
                         # "apigateway.amazonaws.com",
                         "lambda.amazonaws.com", # Used to call lambdas from within another lambda
                         "events.amazonaws.com", # Used for Scheduling lambda execution
-                        # "dynamodb.amazonaws.com",
+                        "dynamodb.amazonaws.com",
                     ]
                 },
                 "Action": "sts:AssumeRole",
@@ -609,7 +626,8 @@ def create_roles(jobs: typing.Dict[str, typing.Any]) -> None:
                     "dynamodb:DeleteItem",
                     "dynamodb:Scan",
                     "dynamodb:DescribeStream",
-                    "dynamodb:ListStreams"
+                    "dynamodb:ListStreams",
+                    "dynamodb:DescribeTable",
                 ],
                 "Resource": f"arn:aws:dynamodb:{region_name}:{account_id}:table/*",
             },
@@ -1377,4 +1395,35 @@ def create_api_endpoints(jobs: typing.Dict[str, typing.Any]) -> None:
         region_name: str = boto3.session.Session().region_name
         url: str = f'https://{rest_api_id}.execute-api.{region_name}.amazonaws.com/{stage}/{route}'
         logger.info(f'Deployment Execution URL[{url}]')
+
+COGNITO_TRIGGER_KEY_MAP = {
+  'post-authen': 'PostAuthentication',
+  'pre-token-generation': 'PreTokenGeneration'
+}
+def scan_cognito_integrations(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('cognito-idp')
+    for job_name, conf in jobs.items():
+        user_pool_id = conf['aws-deploy']['cognito']['user_pool_id']
+        conf['aws-deployed']['cognito'] = {
+          'user-pool-id': conf['aws-deploy']['cognito']['user_pool_id'],
+          'client-id': conf['aws-deploy']['cognito']['client_id'],
+          'lambda-configuration': client.describe_user_pool(UserPoolId=user_pool_id)['UserPool']['LambdaConfig']
+        }
+
+def destroy_cognito_integrations(jobs: typing.Dict[str, typing.Any]) -> None:
+    pass
+
+def create_cognito_integrations(jobs: typing.Dict[str, typing.Any]) -> None:
+    client = boto3.client('cognito-idp')
+    logger.info(f'Updating Cognito Trigger')
+    time.sleep(2)
+    for job_name, conf in jobs.items():
+        function_arn = conf['aws-deployed']['aws-lambda']['FunctionArn']
+        function_name = conf['aws-deployed']['aws-lambda']['FunctionName']
+        cognito_trigger = COGNITO_TRIGGER_KEY_MAP[conf['aws-deploy']['cognito']['triggers'][0]]
+        lambda_configuration = conf['aws-deployed']['cognito']['lambda-configuration'].copy()
+        lambda_configuration[cognito_trigger] = function_arn
+        user_pool_id = conf['aws-deployed']['cognito']['user-pool-id']
+        logger.info(f'Updating Cognito[{user_pool_id}] LambdaConfiguration for function[{function_name}]')
+        client.update_user_pool(UserPoolId=user_pool_id, LambdaConfig=lambda_configuration)
 

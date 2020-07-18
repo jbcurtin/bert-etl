@@ -3,11 +3,11 @@ import hashlib
 import json
 import logging
 import os
-import sync_utils
 import time
 import typing
 
 from bert.etl.constants import BERT_ETL_S3_PREFIX
+from bert.etl.sync_utils import upload_dataset, download_dataset
 
 from botocore.exceptions import ClientError
 
@@ -39,7 +39,7 @@ class ETLState:
             return self
 
         try:
-            self._state = sync_utils.download_dataset(self._s3_key, os.environ['DATASET_BUCKET'], dict)
+            self._state = download_dataset(self._s3_key, os.environ['DATASET_BUCKET'], dict)
         except ClientError:
             self.clear()
 
@@ -52,7 +52,7 @@ class ETLState:
         state_hash = self._generate_hash(self._state)
         # Check to see if the state hash changed
         if state_hash != self._state_hash:
-            sync_utils.upload_dataset(self._state, self._s3_key, os.environ['DATASET_BUCKET'])
+            upload_dataset(self._state, self._s3_key, os.environ['DATASET_BUCKET'])
 
     def _generate_hash(self: PWN, datum: typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, int, float]) -> bool:
         if isinstance(datum, (list, dict)):
@@ -141,11 +141,11 @@ class ETLDataset:
         if self._update is True:
             s3_key = f'{self._prefix}/0.json'
             self._clear_datasets()
-            sync_utils.upload_dataset(self._dataset, s3_key, os.environ['DATASET_BUCKET'])
+            upload_dataset(self._dataset, s3_key, os.environ['DATASET_BUCKET'])
 
         else:
             s3_key = self._generate_next_s3_key()
-            sync_utils.upload_dataset(self._dataset, s3_key, os.environ['DATASET_BUCKET'])
+            upload_dataset(self._dataset, s3_key, os.environ['DATASET_BUCKET'])
 
     def contains(self: PWN, datum: typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, int, float], *hash_keys: typing.List[str]) -> bool:
         return self._state.contains(datum)
@@ -183,11 +183,11 @@ class ETLDatasetReaderIterator:
                 except IndexError:
                     raise StopIteration
 
-                self._local_collection.extend(sync_utils.download_dataset(s3_key, os.environ['DATASET_BUCKET'], list))
+                self._local_collection.extend(download_dataset(s3_key, os.environ['DATASET_BUCKET'], list))
 
             if len(self._local_collection) == 0:
                 raise StopIteration
-            
+
             return self._local_collection.pop(0)
 
 

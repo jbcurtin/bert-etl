@@ -6,16 +6,22 @@ import os
 import tempfile
 import typing
 
+from bert.etl.security import AccessLevel
+
 ENCODING = 'utf-8'
 logger = logging.getLogger(__name__)
-def upload_dataset(dataset: typing.Any, s3_key: str, bucket_name: str) -> None:
+def upload_dataset(dataset: typing.Any, s3_key: str, bucket_name: str, access_level: AccessLevel = None) -> None:
     filepath = tempfile.NamedTemporaryFile().name
     with open(filepath, 'wb') as stream:
         stream.write(json.dumps(dataset).encode(ENCODING))
 
     logger.info(f'Uploading Dataset[{s3_key}]')
     s3_client = boto3.client('s3')
-    s3_client.upload_file(filepath, bucket_name, s3_key)
+    if access_level:
+        s3_client.upload_file(filepath, bucket_name, s3_key, ExtraArgs={'ACL': access_level.value})
+
+    else:
+        s3_client.upload_file(filepath, bucket_name, s3_key)
 
 def download_dataset(s3_key: str, bucket_name: str, expected_datastructure: typing.Any = list) -> typing.Any:
     filepath = tempfile.NamedTemporaryFile().name
@@ -32,11 +38,4 @@ def download_dataset(s3_key: str, bucket_name: str, expected_datastructure: typi
 
     else:
         raise NotImplementedError(f'Unexpeceted DataStructure[{expected_datastructure}]')
-
-
-# def upload_downloads_dataset(dataset: typing.Dict[str, typing.Any]) -> None:
-#     upload_dataset(dataset, KEYS['downloads'], os.environ['DATASET_BUCKET'])
-# 
-# def download_downloads_dataset() -> typing.Dict[str, typing.Any]:
-#     return download_dataset(KEYS['downloads'], os.environ['DATASET_BUCKET'], dict)
 

@@ -131,7 +131,7 @@ class DynamodbQueue(BaseQueue):
 
         else:
             queue_item = QueueItem(bert_encoders.decode_object(value['datum']), value['identity']['S'])
-            if value['identity']['S'] in ['sns-entry', 'invoke-arg', 'api-gateway']:
+            if value['identity']['S'] in ['sns-entry', 'invoke-arg', 'api-gateway', 'cognito']:
                 return queue_item
 
             # The order of data when coming out of the database maynot be preserved, resulting in a different identity

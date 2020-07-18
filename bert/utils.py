@@ -161,6 +161,16 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
             bert_configuration.get('every_lambda', {'events':{}}),
             bert_configuration.get(job_name, {'events': {}}))
 
+        cognito = bert_shortcuts.get_if_exists(
+            'cognito', {}, dict,
+            bert_configuration.get('every_lambda', {'triggers': []}),
+            bert_configuration.get(job_name, {'triggers': []}))
+
+        dynamodb_tables = bert_shortcuts.get_if_exists(
+            'dynamodb.tables', [], list,
+            bert_configuration.get('every_lambda', {'dynamodb': {}}),
+            bert_configuration.get(job_name, {'dynamodb': {}}))
+
         api_stage: str = bert_shortcuts.get_if_exists(
             'api.stage', None, str,
             bert_configuration.get('every_lambda', {'api': {}}),
@@ -191,6 +201,10 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
         # Set QueueType to dynamodb unless they've specifically requested a BERT_QUEUE_TYPE
         env_vars['BERT_QUEUE_TYPE'] = env_vars.get('BERT_QUEUE_TYPE', 'dynamodb')
         env_vars['BERT_MODULE_NAME'] = module_name
+        if not cognito.get('triggers', None) is None:
+            env_vars['COGNITO_CLIENT_ID'] = cognito['client_id']
+            env_vars['COGNITO_USER_POOL_ID'] = cognito['user_pool_id']
+
         requirements: typing.Dict[str, str] = bert_shortcuts.merge_requirements(
             bert_configuration.get('every_lambda', {'requirements': {}}).get('requirements', {}),
             bert_configuration.get(job_name, {'requirements': {}}).get('requirements', {}))
@@ -212,6 +226,8 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                     'bottle': {},
                     'iam': {},
                     'kms': {},
+                    'cognito': {},
+                    'dynamodb': {},
                 },
                 'aws-deploy': {
                     'timeout': timeout,
@@ -223,11 +239,15 @@ def map_jobs(jobs: typing.Dict[str, typing.Any], module_name: str) -> None:
                     'work-table-name': job.work_key,
                     'done-table-name': job.done_key,
                     'environment': env_vars,
+                    'cognito': cognito,
                     'batch-size': batch_size,
                     'batch-size-delay': batch_size_delay,
                     'concurrency-limit': concurrency_limit,
                     'invoke-args': invoke_args,
                     'layers': layers,
+                    'dynamodb': {
+                        'tables': dynamodb_tables,
+                    },
                 },
                 'aws-build': {
                     'lambdas-path': os.path.join(os.getcwd(), 'lambdas'),

@@ -7,6 +7,7 @@ import signal
 import typing
 
 from bert import utils as bert_utils
+from bert.runner.datatypes import CognitoTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ def capture_options() -> typing.Any:
     parser.add_argument('-n', '--function-name', type=str, default=None)
     parser.add_argument('-f', '--flush-db', action='store_true', default=False)
     parser.add_argument('-w', '--web-service', action='store_true', default=False)
+    parser.add_argument('-c', '--cognito', action='store_true', default=False)
+    parser.add_argument('-t', '--cognito-trigger', type=CognitoTrigger, default=None)
     return parser.parse_args()
 
 
@@ -45,6 +48,21 @@ def start_webservice(options: argparse.Namespace) -> None:
     from bert.webservice import manager
     manager.run_webservice(options, jobs)
 
+def test_cognito_event(options: argparse.Namespace) -> None:
+    triggers = ','.join([member.value for member in CognitoTrigger])
+    if options.cognito_trigger is None:
+        raise Exception(f'Cognito Trigger type required: {triggers}')
+
+    if options.flush_db:
+        bert_utils.flush_db()
+
+    jobs = bert_utils.scan_jobs(options.module_name)
+    jobs = bert_utils.map_jobs(jobs, options.module_name)
+
+    signal.signal(signal.SIGINT, handle_signal)
+    from bert.runner import manager
+    manager.run_jobs(options, jobs)
+
 def start_service(options: argparse.Namespace) -> None:
     if options.flush_db:
         bert_utils.flush_db()
@@ -62,6 +80,9 @@ def run_from_cli():
     options = capture_options()
     if options.web_service:
         start_webservice(options)
+
+    elif options.cognito:
+        test_cognito_event(options)
 
     else:
         start_service(options)

@@ -76,6 +76,8 @@ def deploy_service(options) -> None:
         bert_deploy_utils.build_archives(jobs)
         bert_deploy_utils.create_roles(jobs)
         bert_deploy_utils.scan_dynamodb_tables(jobs)
+        bert_deploy_utils.scan_cognito_integrations(jobs)
+        bert_deploy_utils.destroy_cognito_integrations(jobs)
         bert_deploy_utils.destroy_lambda_to_table_bindings(jobs)
         bert_deploy_utils.destroy_lambda_concurrency(jobs)
         bert_deploy_utils.destroy_sns_topic_lambdas(jobs)
@@ -94,8 +96,9 @@ def deploy_service(options) -> None:
         bert_deploy_utils.bind_events_for_bottle_functions(jobs)
         bert_deploy_utils.bind_events_for_init_function(jobs)
         bert_deploy_utils.create_api_endpoints(jobs)
+        bert_deploy_utils.create_cognito_integrations(jobs)
         bert_deploy_utils.destroy_monitor()
-        bert_deploy_utils.deploy_monitor(options.module_name)
+        # bert_deploy_utils.deploy_monitor(options.module_name)
 
     else:
         raise NotImplementedError(options.service)

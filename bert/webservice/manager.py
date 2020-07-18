@@ -32,13 +32,15 @@ def run_webservice(options: argparse.Namespace, jobs: typing.Dict[str, 'conf']) 
         bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
         execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
         api: 'API' = getattr(conf['job'], '_api', None)
-        if api:
-            if execution_role_arn is None:
+        if api is None:
+            raise NotImplementedError(f'API missing from bert-etl file')
+
+        if execution_role_arn is None:
+            with bert_datasource.ENVVars(conf['runner']['environment']):
+                handler.serve_handler(api, conf['job'], conf['api']['stage'])
+
+        else:
+            with bert_aws.assume_role(execution_role_arn):
                 with bert_datasource.ENVVars(conf['runner']['environment']):
                     handler.serve_handler(api, conf['job'], conf['api']['stage'])
-
-            else:
-                with bert_aws.assume_role(execution_role_arn):
-                    with bert_datasource.ENVVars(conf['runner']['environment']):
-                        handler.serve_handler(api, conf['job'], conf['api']['stage'])
 
