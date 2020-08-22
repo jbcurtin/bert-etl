@@ -1,10 +1,3 @@
-
-
-release:
-	make clean
-	python setup.py sdist bdist_wheel --universal
-	python -m twine upload --verbose dist/*
-
 clean :
 	rm -rf dist
 	rm -rf build
@@ -14,3 +7,15 @@ install: clean
 	pip uninstall bert-etl
 	python setup.py install
 
+release: clean
+	pip install -U twine
+	pip install -U setuptools
+	pip install -U pip
+	python setup.py sdist
+	python -m twine upload --verbose dist/*
+
+build-docs:
+	pip install sphinx sphinx_rtd_theme pip setuptools -U
+	mkdir -p /tmp/docs
+	rm -rf /tmp/docs/*
+	sphinx-build -b html docs/ /tmp/docs

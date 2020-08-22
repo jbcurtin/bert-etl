@@ -81,6 +81,9 @@ def follow(
     if getattr(wrapped_func, 'build_dir', None) is None:
       wrapped_func.build_dir = wrapped_func_build_dir
 
+    if getattr(wrapped_func, 'cache_backend', None) is  None:
+      wrapped_func.cache_backend = wrapped_func_cache_backend
+
     if getattr(wrapped_func, 'pipeline_type', None) is None:
       wrapped_func.pipeline_type = pipeline_type
 
@@ -111,7 +114,7 @@ def follow(
     def _wrapper(*args, **kwargs):
       if wrapped_func_cache_backend:
         if wrapped_func_cache_backend.contains(wrapped_func_done_key):
-          wrapped_func_cache_backend.fill_done_queue(wrapped_func_done_key)
+          wrapped_func_cache_backend.fill_queue(wrapped_func_done_key)
           wrapped_func_cache_backend.clear_queue(wrapped_func_work_key)
           wrapped_func_result = wrapped_func(*args, **kwargs)
 

@@ -23,23 +23,21 @@ if CURRENT_PYTHON < REQUIRED_PYTHON:
 ==========================
 Unsupported Python version
 ==========================
-This version of Bert requires Python {}.{}, but you're trying to
+This version of bert-etl requires Python {}.{}, but you're trying to
 install it on Python {}.{}.
 This may be because you are using a version of pip that doesn't
 understand the python_requires classifier. Make sure you
 have pip >= 9.0 and setuptools >= 24.2, then try again:
     $ python -m pip install --upgrade pip setuptools
     $ python -m pip install bert
-This will install the latest version of Bert which works on your
+This will install the latest version of bert-etl which works on your
 version of Python
 """.format(*(REQUIRED_PYTHON + CURRENT_PYTHON)))
     sys.exit(1)
 
 
 EXCLUDE_FROM_PACKAGES = ['bert.bin']
-with open('VERSION', 'r') as stream:
-    version = stream.read()
-
+version = '0.4.70'
 description = 'A microframework for simple ETL solutions'
 
 def read(fname):
@@ -80,12 +78,13 @@ setup(
     },
     zip_safe=False,
     classifiers=[
-    # 'Framework :: Bert',
     'Operating System :: OS Independent',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3 :: Only',
   ],
   project_urls={}

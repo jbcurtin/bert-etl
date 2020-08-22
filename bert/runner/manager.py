@@ -1,5 +1,6 @@
 #!/usr/env/bin python
 
+import argparse
 import functools
 import logging
 import multiprocessing
@@ -37,12 +38,20 @@ def inject_cognito_event(conf: typing.Dict[str, typing.Any]) -> typing.Dict[str,
     event = runner_datatypes.CognitoEvent(event_defaults)
     return event.trigger_content(triggers[0])
 
-def run_jobs(options: 'argparse.Options', jobs: typing.Dict[str, types.FunctionType]):
+def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
-        for job_name, conf in jobs.items():
-            if not options.function_name is None and options.function_name != job_name:
-                logger.info(f'Skipping job[{job_name}]')
+        for idx, (job_name, conf) in enumerate(jobs.items()):
+            if options.jump_to_job and options.jump_to_job != job_name:
+                logger.info(f'Skipping Job[{job_name}]')
                 continue
+
+            if options.jump_to_job and options.jump_to_job == job_name:
+                previous_job_name = [k for k in jobs.keys()][idx - 1]
+                previous_job_conf = jobs[previous_job_name]
+                cache_backend = previous_job_conf['job'].cache_backend
+                if cache_backend:
+                    cache_backend.clear_queue(conf['job'].work_key)
+                    cache_backend.fill_queue(conf['job'].work_key, options.jump_to_number)
 
             bert_encoders.clear_encoding()
             bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])

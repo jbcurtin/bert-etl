@@ -20,11 +20,12 @@ def capture_options() -> typing.Any:
     parser = argparse.ArgumentParser()
     # parser.add_argument('-n', '--new-module', default=None, required=False)
     parser.add_argument('-m', '--module-name', required=True, help='https://bert-etl.readthedocs.io/en/latest/module_name.html')
-    parser.add_argument('-n', '--function-name', type=str, default=None)
     parser.add_argument('-f', '--flush-db', action='store_true', default=False)
     parser.add_argument('-w', '--web-service', action='store_true', default=False)
     parser.add_argument('-c', '--cognito', action='store_true', default=False)
     parser.add_argument('-t', '--cognito-trigger', type=CognitoTrigger, default=None)
+    parser.add_argument('-j', '--jump-to-job', type=str, default=None)
+    parser.add_argument('-n', '--jump-to-number', type=int, default=0)
     return parser.parse_args()
 
 

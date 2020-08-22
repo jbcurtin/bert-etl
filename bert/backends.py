@@ -24,7 +24,7 @@ class RedisCacheBackend(CacheBackend):
     def __init__(self: PWN) -> None:
         self._client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
         self._contains_key = 'redis-cache-backend'
-        self._step = 200
+        self._step = 20000
 
     def _cache_key(self: PWN, key: str) -> str:
         return f'{self._contains_key}-{key}'
@@ -40,7 +40,7 @@ class RedisCacheBackend(CacheBackend):
 
         self._client.hset(self._contains_key, queue_key, 1)
 
-    def fill_done_queue(self: PWN, queue_key: str) -> None:
+    def fill_queue(self: PWN, queue_key: str, max_fill: int = 0) -> None:
         cache_key = self._cache_key(queue_key)
         total = self._client.llen(cache_key)
         offset = 0
@@ -48,6 +48,9 @@ class RedisCacheBackend(CacheBackend):
             next_step_result = self._client.lrange(cache_key, offset, offset + self._step)
             self._client.lpush(queue_key, *next_step_result)
             offset = offset + len(next_step_result)
+            if max_fill > 0:
+                if offset > max_fill:
+                    break
 
     def contains(self: PWN, queue_key: str) -> bool:
         value = self._client.hget(self._contains_key, queue_key)
