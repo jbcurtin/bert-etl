@@ -89,6 +89,10 @@ class BaseQueue:
     def _destroy(self: PWN, queue_item: QueueItem) -> None:
         raise NotImplementedError
 
+    def size(self: PWN) -> str:
+        raise NotImplementedError
+
+
 class DynamodbQueue(BaseQueue):
     _dynamodb_client: 'boto3.client("dynamodb")'
     def __init__(self: PWN, table_name: str) -> None:
@@ -150,6 +154,9 @@ class RedisQueue(BaseQueue):
 
     def _destroy(self: PWN, queue_item: QueueItem) -> None:
         pass
+
+    def size(self: PWN) -> int:
+        return int(self._redis_client.llen(self._table_name))
 
     def get(self) -> QueueItem:
         try:

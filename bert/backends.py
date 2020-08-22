@@ -34,6 +34,8 @@ class RedisCacheBackend(CacheBackend):
         total = self._client.llen(queue_key)
         offset = 0
         while offset < total:
+            # Added total to loop because it can be updated my other processes
+            total = self._client.llen(queue_key)
             next_step_result = self._client.lrange(queue_key, offset, offset + self._step)
             self._client.lpush(cache_key, *next_step_result)
             offset = offset + len(next_step_result)
@@ -45,6 +47,8 @@ class RedisCacheBackend(CacheBackend):
         total = self._client.llen(cache_key)
         offset = 0
         while offset < total:
+            # Added total to loop because it can be updated my other processes
+            total = self._client.llen(cache_key)
             next_step_result = self._client.lrange(cache_key, offset, offset + self._step)
             self._client.lpush(queue_key, *next_step_result)
             offset = offset + len(next_step_result)

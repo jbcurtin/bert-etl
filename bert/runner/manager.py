@@ -22,6 +22,7 @@ from bert.runner import \
 
 logger = logging.getLogger(__name__)
 STOP_DAEMON: bool = False
+LOG_ERROR_ONLY = not bert_constants.DEBUG
 
 def inject_cognito_event(conf: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
     event_defaults = runner_datatypes.CognitoEventDefaults(
@@ -114,17 +115,20 @@ def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionT
                 bert_encoders.load_queue_decoders(conf['encoding']['queue_decoders'])
                 execution_role_arn: str = conf['iam'].get('execution-role-arn', None)
                 job_restart_count: int = 0
+                job_work_queue, job_done_queue, ologger = bert_utils.comm_binders(conf['job'])
                 while job_restart_count < conf['runner']['max-retries']:
                     try:
-
                         if execution_role_arn is None:
                             with bert_datasource.ENVVars(conf['runner']['environment']):
                                 conf['job']()
-
+                                while job_work_queue.size() > 0:
+                                    conf['job']()
                         else:
                             with bert_aws.assume_role(execution_role_arn):
                                 with bert_datasource.ENVVars(conf['runner']['environment']):
                                     conf['job']()
+                                    while job_worker_queue.size() > 0:
+                                        conf['job']()
 
                     except Exception as err:
                         if LOG_ERROR_ONLY:
@@ -136,11 +140,11 @@ def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionT
                         break
 
                     job_restart_count += 1
+
                 else:
                     logger.exception(f'Job[{conf["job"].func_space}] failed {job_restart_count} times')
 
             for idx in range(0, conf['job'].workers):
-                logging.info(f'Spawning Process[{idx}]')
                 proc: multiprocessing.Process = multiprocessing.Process(target=_job_runner, args=())
                 proc.daemon = True
                 proc.start()
