@@ -9,8 +9,7 @@ author_email = 'bert-etl@jbcurtin.io'
 copyright = f'{copyright_date}, {author}'
 
 # The full version, including alpha/beta/rc tags
-with open('../VERSION', 'r') as stream:
-    release = stream.read()
+release = '0.4.72'
 
 html_theme = "sphinx_rtd_theme"
 

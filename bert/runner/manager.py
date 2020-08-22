@@ -41,6 +41,10 @@ def inject_cognito_event(conf: typing.Dict[str, typing.Any]) -> typing.Dict[str,
 def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
         for idx, (job_name, conf) in enumerate(jobs.items()):
+            if options.stop_at_job and options.stop_at_job == job_name:
+                logger.info(f'Stoping at Job[{job_name}]')
+                break
+
             if options.jump_to_job and options.jump_to_job != job_name:
                 logger.info(f'Skipping Job[{job_name}]')
                 continue
@@ -80,6 +84,11 @@ def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionT
 
     else:
         for job_name, conf in jobs.items():
+            # Todo: Add jump-to-job here
+            if options.stop_at_job and options.stop_at_job == job_name:
+                logger.info(f'Stoping at Job[{job_name}]')
+                break
+
             logger.info(f'Running Job[{conf["job"].func_space}] as [{conf["job"].pipeline_type.value}] for [{conf["job"].__name__}]')
             logger.info(f'Job worker count[{conf["job"].workers}]')
             processes: typing.List[multiprocessing.Process] = []

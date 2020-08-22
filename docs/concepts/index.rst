@@ -68,3 +68,5 @@ Citation
 .. toctree::
     :maxdepth: 0
 
+    mass-processing
+

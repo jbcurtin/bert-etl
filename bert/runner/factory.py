@@ -26,6 +26,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-t', '--cognito-trigger', type=CognitoTrigger, default=None)
     parser.add_argument('-j', '--jump-to-job', type=str, default=None)
     parser.add_argument('-n', '--jump-to-number', type=int, default=0)
+    parser.add_argument('-s', '--stop-at-job', type=str, default=None)
     return parser.parse_args()
 
 
