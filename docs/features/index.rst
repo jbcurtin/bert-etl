@@ -12,5 +12,6 @@ Features
     schedule_expressions
     sns_topics
     assume_role
+    cache_backends
 
 
