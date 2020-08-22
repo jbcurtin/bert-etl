@@ -158,6 +158,9 @@ class RedisQueue(BaseQueue):
             return 'STOP'
 
         else:
+            # if self._cache_backend.has(value):
+            #     return self._cache_backend.obtain(value)
+
             return bert_encoders.decode_object(json.loads(value)['datum'])
 
     def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
@@ -165,6 +168,7 @@ class RedisQueue(BaseQueue):
             'identity': 'local-queue',
             'datum': value
         })).encode(bert_constants.ENCODING)
+        # self._cache_backend.store(encoded_value)
         self._redis_client.rpush(self._table_name, encoded_value)
 
 
