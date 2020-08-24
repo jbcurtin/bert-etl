@@ -67,7 +67,7 @@ def follow(
     wrapped_func_work_key: str = parent_func_done_key
     wrapped_func_done_key: str = naming.calc_func_key(wrapped_func_space, 'done')
     wrapped_func_build_dir: str = os.path.join('/tmp', wrapped_func_space, 'build')
-    wrapped_func_cache_backend: backends.CacheBackend = cache_backend() if cache_backend else None
+    wrapped_func_cache_backend: backends.CacheBackend = cache_backend(wrapped_func_work_key, wrapped_func_done_key) if cache_backend else None
 
     if getattr(wrapped_func, 'func_space', None) is None:
       wrapped_func.func_space = wrapped_func_space
@@ -112,20 +112,7 @@ def follow(
 
     @functools.wraps(wrapped_func)
     def _wrapper(*args, **kwargs):
-      if wrapped_func_cache_backend:
-        if wrapped_func_cache_backend.contains(wrapped_func_done_key):
-          wrapped_func_cache_backend.fill_queue(wrapped_func_done_key)
-          wrapped_func_cache_backend.clear_queue(wrapped_func_work_key)
-          wrapped_func_result = wrapped_func(*args, **kwargs)
-
-        else:
-          wrapped_func_result = wrapped_func(*args, **kwargs)
-          wrapped_func_cache_backend.fill_cache(wrapped_func_done_key)
-
-      else:
-        wrapped_func_result = wrapped_func(*args, **kwargs)
-
-      return wrapped_func_result
+      return wrapped_func(*args, **kwargs)
 
     chain: typing.List[types.FunctionType] = DAISY_CHAIN.get(parent_func_space, [])
     chain.append(wrapped_func_space)

@@ -24,7 +24,7 @@ def capture_options() -> typing.Any:
     parser.add_argument('-m', '--module-name', required=True, help='https://bert-etl.readthedocs.io/en/latest/module_name.html')
     parser.add_argument('-p', '--print-job-spaces', default=False, action='store_true')
     parser.add_argument('-d', '--count-job-duplicates', default=False, action='store_true')
-    parser.add_argument('-s', '--scan-job-spaces', default=False, action='store_true')
+    parser.add_argument('-c', '--count-job-spaces', default=False, action='store_true')
     return parser.parse_args()
 
 def print_job_spaces(options: argparse.Namespace):
@@ -36,7 +36,7 @@ def print_job_spaces(options: argparse.Namespace):
         logging.info(f'Work Table Space[{work_queue._table_name}] for Job[{job_name}]')
 
     else:
-        logging.info(f'Done Table Space[{work_queue._table_name}] for Job[{job_name}]')
+        logging.info(f'Done Table Space[{done_queue._table_name}] for Job[{job_name}]')
        
 def count_job_duplicates(options: argparse.Namespace) -> None:
     jobs = bert_utils.scan_jobs(options.module_name)
@@ -58,15 +58,27 @@ def count_job_duplicates(options: argparse.Namespace) -> None:
         unique_hash_count = len([entry for entry in set(entry_hashes)])
         logger.info(f'Duplicate Entries for Job[{job_name}]: {len(entry_hashes) - unique_hash_count}; total: {len(entry_hashes)}')
 
-def scan_job_spaces(options: argparse.Namespace):
+def count_job_spaces(options: argparse.Namespace):
     jobs = bert_utils.scan_jobs(options.module_name)
     jobs = bert_utils.map_jobs(jobs, options.module_name)
     client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
-    for job_name, conf in jobs.items():
+    for idx, (job_name, conf) in enumerate(jobs.items()):
         job = conf['job']
         work_queue, done_queue, ologger = bert_utils.comm_binders(job)
-        total = client.llen(work_queue._table_name)
-        logger.info(f'Work Total for Job[{job_name}]: {total}')
+        if idx != len(jobs.keys()) - 1:
+            total = client.llen(work_queue._table_name)
+            logger.info(f'{job_name} Count[{total}] (job)')
+            if job.cache_backend:
+                cache_key = job.cache_backend._cache_key(job.cache_backend._done_tablename)
+                total = client.llen(cache_key)
+                logger.info(f'{job_name} Count[{total}] (cache)')
+
+        else:
+            total = client.llen(work_queue._table_name)
+            logger.info(f'{job_name} Work Count[{total}]')
+
+            total = client.llen(done_queue._table_name)
+            logger.info(f'{options.module_name} Pipeline Count[{total}]')
 
 def run_from_cli():
     import sys, os
@@ -80,8 +92,8 @@ def run_from_cli():
         count_job_duplicates(options)
         sys.exit(0)
 
-    elif options.scan_job_spaces:
-        scan_job_spaces(options)
+    elif options.count_job_spaces:
+        count_job_spaces(options)
 
 if __name__ in ['__main__']:
     run_from_cli()

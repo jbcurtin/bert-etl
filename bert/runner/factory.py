@@ -18,15 +18,22 @@ MAX_RESTART: int = int(os.environ.get('MAX_RESTART_COUNT', 10))
 
 def capture_options() -> typing.Any:
     parser = argparse.ArgumentParser()
-    # parser.add_argument('-n', '--new-module', default=None, required=False)
+    # Bert JOB API
     parser.add_argument('-m', '--module-name', required=True, help='https://bert-etl.readthedocs.io/en/latest/module_name.html')
-    parser.add_argument('-f', '--flush-db', action='store_true', default=False)
+
+    # Webservice API... Pending removal
     parser.add_argument('-w', '--web-service', action='store_true', default=False)
+
+    # AWS Cognito API
     parser.add_argument('-c', '--cognito', action='store_true', default=False)
     parser.add_argument('-t', '--cognito-trigger', type=CognitoTrigger, default=None)
-    parser.add_argument('-j', '--jump-to-job', type=str, default=None)
-    parser.add_argument('-n', '--jump-to-number', type=int, default=0)
-    parser.add_argument('-s', '--stop-at-job', type=str, default=None)
+
+    # Replay API
+    parser.add_argument('-f', '--flush-db', action='store_true', default=False)
+    parser.add_argument('-e', '--enable-job-cache', action='store_true', default=False)
+    parser.add_argument('-n', '--queue-fill-count', type=int, default=0)
+    parser.add_argument('-j', '--start-before-job', type=str, default=None)
+    parser.add_argument('-s', '--stop-after-job', type=str, default=None)
     return parser.parse_args()
 
 
@@ -48,6 +55,7 @@ def start_webservice(options: argparse.Namespace) -> None:
 
     signal.signal(signal.SIGINT, handle_signal)
     from bert.webservice import manager
+    manager.validate_options(options, jobs)
     manager.run_webservice(options, jobs)
 
 def test_cognito_event(options: argparse.Namespace) -> None:
@@ -63,6 +71,7 @@ def test_cognito_event(options: argparse.Namespace) -> None:
 
     signal.signal(signal.SIGINT, handle_signal)
     from bert.runner import manager
+    manager.validate_options(options, jobs)
     manager.run_jobs(options, jobs)
 
 def start_service(options: argparse.Namespace) -> None:
@@ -74,6 +83,7 @@ def start_service(options: argparse.Namespace) -> None:
 
     signal.signal(signal.SIGINT, handle_signal)
     from bert.runner import manager
+    manager.validate_options(options, jobs)
     manager.run_jobs(options, jobs)
 
 def run_from_cli():
