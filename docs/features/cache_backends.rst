@@ -1,33 +1,27 @@
-Cache Backends
-##############
+Backend Cache
+#############
 
-Cache Backends provide a space to store inputs and outputs of functions. This is useful in development when you want
-to skip processing of earlier functions in the call chain. Currently there is only support for a REDIS Backend
 
-Cache backends can be added to the `@binding.follow` decorator
+Backend caching provides an API that allows you to process data in real time, without having to step through all the
+functions again each time you want to debug an issue with a job.
 
-Cache Backends take the full output of the function in an clean execution state. Store it in cache to be used nexttime
-the function is called. The function is invoked reguardless of the cache, the work_queue will be empty if the cache
-is full
 
 .. code-block:: python
 
-    from bert import binding, constants, backends
-
-    @binding.follow(earlier_function, cache_backend=backends.RedisCacheBackend)
-    def later_function():
+    @binding.follow('noop', cache_backend=backends.RedisCacheBackend)
+    def first_job():
         ...
 
-        
+    @binding.follow(first_job):
+    def second_job():
+        ...
+
+
+.. code-block:: bash
+
+    $ bert-runner.py --enable-job-cache --stop-after-job first_job
+    $ bert-runner.py --enable-job-cache --start-before-job second_job
 
 .. toctree::
     :maxdepth: 2
-
-    invoke_args
-    queue_encoders__and__queue_decoders
-    bert_config
-    schedule_expressions
-    sns_topics
-    assume_role
-
 
