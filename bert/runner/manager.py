@@ -55,46 +55,45 @@ def _select_previous_job(current_job_name: str, jobs: typing.Dict[str, typing.An
 
     return previous_job_name, previous_job_conf
 
-def handle_job_cache__begin__okay(options: argparse.Namespace, current_job_name: str, jobs: typing.Dict[str, typing.Any]) -> bool:
-    if options.enable_job_cache is False:
+def handle_replay_api__begin_function_invocation_okay(options: argparse.Namespace, job_name: str, job_conf: typing.Dict[str, typing.Any], jobs: typing.Dict[str, typing.Any]) -> bool:
+    if all([
+        options.replay_enabled,
+        job_conf['job'].cache_backend,
+        options.replay_function_name == job_name]):
+        queue_count = job_conf['job'].cache_backend.work_queue_cache_size()
+        if options.replay_fill_count == 0:
+            fill_count = queue_count
+
+        else:
+            fill_count = options.replay_fill_count
+
+        logger.info(f'Filling Work Queue Cache with about {fill_count} items of {queue_count} from Job[{job_name}]')
+        job_conf['job'].cache_backend.clear_work_queue()
+        job_conf['job'].cache_backend.fill_work_queue_from_cache(fill_count)
         return True
 
-    if options.enable_job_cache and options.start_before_job == current_job_name:
-        previous_job_name, previous_job_conf = _select_previous_job(current_job_name, jobs)
-        if previous_job_name is None or previous_job_conf['job'].cache_backend is None:
-            return False
-
-        cache_count = previous_job_conf['job'].cache_backend.done_queue_cache_size()
-        logger.info(f'Filling Job[{current_job_name}] Work Queue from Cache. Cache Count[{cache_count}]')
-        previous_job_conf['job'].cache_backend.clear_done_queue()
-        previous_job_conf['job'].cache_backend.fill_done_queue_from_cache(options.queue_fill_count)
+    previous_jobs = [k for k in jobs.keys()][:[key for key in jobs.keys()].index(job_name)]
+    if all([
+        options.replay_enabled,
+        options.replay_function_name in previous_jobs]):
         return True
 
-    if options.enable_job_cache and options.start_before_job:
-        start_before_job_idx = list(jobs.keys()).index(options.start_before_job)
-        current_job_idx = list(jobs.keys()).index(current_job_name)
-        return current_job_idx > start_before_job_idx
+    return not options.replay_enabled
 
-    if options.enable_job_cache and not options.stop_after_job is None:
-        return True
-
-    return False
-
-def handle_job_cache__done__cleanup(options: argparse.Namespace, job_name: str, conf: typing.Dict[str, typing.Any]) -> None:
-    if options.enable_job_cache and conf['job'].cache_backend and options.stop_after_job == job_name:
-        queue_size = conf['job'].cache_backend.done_queue_size()
-        logger.info(f'Filling Job[{job_name}] Cache from Done Queue. Count[{queue_size}]')
-        conf['job'].cache_backend.clear_cache_for_done_queue()
-        conf['job'].cache_backend.fill_cache_from_done_queue()
-        logger.info(f'Exiting After Job[{job_name}]')
-        sys.exit(0)
+def handle_job_cache__work_queue(options: argparse.Namespace, job_name: str, job_conf: typing.Dict[str, typing.Any]) -> bool:
+    if all([options.cache_enabled, job_conf['job'].cache_backend]):
+        queue_count = job_conf['job'].cache_backend.work_queue_size()
+        logger.info(f'Filling Work Queue Cache with {queue_count} items from Job[{job_name}]')
+        job_conf['job'].cache_backend.clear_work_queue_cache()
+        job_conf['job'].cache_backend.fill_cache_from_work_queue()
 
 def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionType]):
     if bert_constants.DEBUG:
         for idx, (job_name, conf) in enumerate(jobs.items()):
-
-            if handle_job_cache__begin__okay(options, job_name, conf) is False:
+            if handle_replay_api__begin_function_invocation_okay(options, job_name, conf, jobs) is False:
                 continue
+
+            handle_job_cache__work_queue(options, job_name, conf)
 
             bert_encoders.clear_encoding()
             bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
@@ -121,12 +120,14 @@ def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionT
                     with bert_datasource.ENVVars(conf['runner']['environment']):
                         conf['job']()
 
-            handle_job_cache__done__cleanup(options, job_name, conf)
+            # handle_job_cache__done_queue(options, job_name, conf)
 
     else:
         for idx, (job_name, conf) in enumerate(jobs.items()):
-            if handle_job_cache__begin__okay(options, job_name, jobs) is False:
+            if handle_replay_api__begin_function_invocation_okay(options, job_name, conf, jobs) is False:
                 continue
+
+            handle_job_cache__work_queue(options, job_name, conf)
 
             bert_encoders.clear_encoding()
             bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
@@ -234,37 +235,19 @@ def run_jobs(options: argparse.Namespace, jobs: typing.Dict[str, types.FunctionT
 
                     time.sleep(bert_constants.DELAY)
 
-            handle_job_cache__done__cleanup(options, job_name, conf)
-
+            # handle_job_cache__done_queue(options, job_name, conf)
             bert_encoders.clear_encoding()
             bert_encoders.load_identity_encoders(conf['encoding']['identity_encoders'])
             bert_encoders.load_queue_encoders(conf['encoding']['queue_encoders'])
 
 def validate_options(options: argparse.Namespace, jobs: typing.Dict[str, typing.Any]) -> None:
-    if options.enable_job_cache:
-        job_names = [key for key in jobs.keys()]
-        start_before_jobs = []
-        stop_after_jobs = []
+    if options.replay_enabled:
+        cacheable_jobs = []
         for idx, (job_name, conf) in enumerate(jobs.items()):
             if conf['job'].cache_backend:
-                stop_after_jobs.append(job_name)
-                try:
-                    start_before_jobs.append(job_names[idx + 1])
-                except IndexError:
-                    pass
+                cacheable_jobs.append(job_name)
 
-        start_before_jobs_formatted = ', '.join(start_before_jobs)
-        stop_after_job_formatted = ', '.join(stop_after_jobs)
-        if options.start_before_job is None and options.stop_after_job is None:
-            raise NotImplementedError('For Job Cache, you must specify either a Job to cache')
+        formatted_cacheable_jobs = ', '.join(cacheable_jobs)
 
-        if options.start_before_job and not options.start_before_job in start_before_jobs:
-            raise NotImplementedError(f'Job does not have a cache_backend. Available Jobs: [{start_before_jobs_formatted}]')
-
-        if options.stop_after_job and not options.stop_after_job in stop_after_jobs:
-            raise NotImplementedError(f'Job does not have a cache_backend. Available Jobs: [{stop_after_job_formatted}]')
-
-    if not options.enable_job_cache:
-        if options.start_before_job or options.stop_after_job:
-            raise NotImplementedError('This option is not available without turining one Job Caching. --enable-job-cache')
-
+        # import pdb; pdb.set_trace()
+        pass

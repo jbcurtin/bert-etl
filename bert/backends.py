@@ -44,7 +44,7 @@ class RedisCacheBackend(CacheBackend):
             next_step_result = self._client.lrange(queue_name, offset, offset + self._step)
             self._client.lpush(cache_key, *next_step_result)
             offset = offset + len(next_step_result)
-            if max_fill > 0 and offset > max_fill:
+            if max_fill > 0 and offset >= max_fill:
                 break
 
     def fill_cache_from_done_queue(self: PWN, max_fill: int = 0) -> None:
@@ -54,11 +54,11 @@ class RedisCacheBackend(CacheBackend):
         self.fill_cache(self._work_tablename)
 
     # Clear Caches from Queue Tablename
-    def clear_cache_for_done_queue(self: PWN) -> None:
+    def clear_work_queue_cache(self: PWN) -> None:
         cache_key = self._cache_key(self._done_tablename)
         self._client.delete(cache_key)
 
-    def clear_cache_for_work_queue(self: PWN) -> None:
+    def clear_done_queue_cache(self: PWN) -> None:
         cache_key = self._cache_key(self._work_tablename)
         self._client.delete(cache_key)
 
@@ -70,16 +70,24 @@ class RedisCacheBackend(CacheBackend):
         offset = 0
         while offset < total:
             next_step_result = self._client.lrange(cache_key, offset, offset + self._step)
-            self._client.lpush(queue_name, *next_step_result)
+            if len(next_step_result) + offset > max_fill:
+                diff_fill = len(next_step_result) + offset - max_fill
+                diff_fill = len(next_step_result) - diff_fill
+                self._client.lpush(queue_name, *next_step_result[:diff_fill])
+                break
+
+            else:
+                self._client.lpush(queue_name, *next_step_result)
+
             offset = offset + len(next_step_result)
             if max_fill > 0 and offset > max_fill:
                 break
 
     def fill_done_queue_from_cache(self: PWN, max_fill: int = 0) -> None:
-        return self.fill_queue(self._done_tablename)
+        return self.fill_queue(self._done_tablename, max_fill)
 
     def fill_work_queue_from_cache(self: PWN, max_fill: int = 0) -> None:
-        return self.fill_queue(self._work_tablename)
+        return self.fill_queue(self._work_tablename, max_fill)
 
     # Clear queues
     def clear_done_queue(self: PWN) -> None:

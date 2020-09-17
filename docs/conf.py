@@ -9,7 +9,7 @@ author_email = 'bert-etl@jbcurtin.io'
 copyright = f'{copyright_date}, {author}'
 
 # The full version, including alpha/beta/rc tags
-release = '0.4.74'
+release = '0.4.75'
 
 html_theme = "sphinx_rtd_theme"
 

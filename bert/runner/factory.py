@@ -20,20 +20,26 @@ def capture_options() -> typing.Any:
     parser = argparse.ArgumentParser()
     # Bert JOB API
     parser.add_argument('-m', '--module-name', required=True, help='https://bert-etl.readthedocs.io/en/latest/module_name.html')
+    
+    # Data DB API
+    parser.add_argument('-f', '--flush-db', action='store_true', default=False)
+    # parser.add_argument('-t', '--database-type', type=QueueBackendType, default=QueueBackendType.Redis)
 
     # Webservice API... Pending removal
     parser.add_argument('-w', '--web-service', action='store_true', default=False)
 
     # AWS Cognito API
-    parser.add_argument('-c', '--cognito', action='store_true', default=False)
+    parser.add_argument('-g', '--cognito', action='store_true', default=False)
     parser.add_argument('-t', '--cognito-trigger', type=CognitoTrigger, default=None)
 
+    # Cache API
+    parser.add_argument('-e', '--cache-enabled', action='store_true', default=False, help='Enable Cache API')
+
     # Replay API
-    parser.add_argument('-f', '--flush-db', action='store_true', default=False)
-    parser.add_argument('-e', '--enable-job-cache', action='store_true', default=False)
-    parser.add_argument('-n', '--queue-fill-count', type=int, default=0)
-    parser.add_argument('-j', '--start-before-job', type=str, default=None)
-    parser.add_argument('-s', '--stop-after-job', type=str, default=None)
+    parser.add_argument('-r', '--replay-enabled', action='store_true', default=False, help='Enable Replay API')
+    parser.add_argument('-n', '--replay-function-name', type=str, default=None, help='Which function to focus on?')
+    parser.add_argument('-c', '--replay-fill-count', type=int, default=0, help='Fill Cache Count for Replay API?')
+    parser.add_argument('-s', '--stop-after-function', action='store_true', default=False, help='Stop after replaying function?')
     return parser.parse_args()
 
 
