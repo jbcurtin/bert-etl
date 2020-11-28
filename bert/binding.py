@@ -5,10 +5,12 @@ import marshmallow
 # import marshmallow.schema.UnmarshalResult
 import multiprocessing
 import os
+import inspect
 import types
 import typing
 
 from bert import constants, naming, backends
+from bert.runner.async_utils import obtain_event_loop
 
 DAISY_CHAIN = {}
 REGISTRY: typing.Dict[str, types.FunctionType] = {}
@@ -112,7 +114,11 @@ def follow(
 
     @functools.wraps(wrapped_func)
     def _wrapper(*args, **kwargs):
-      return wrapped_func(*args, **kwargs)
+      if inspect.iscoroutinefunction(wrapped_func):
+        return obtain_event_loop().run_until_complete(wrapped_func(*args, **kwargs))
+
+      else:
+        return wrapped_func(*args, **kwargs)
 
     chain: typing.List[types.FunctionType] = DAISY_CHAIN.get(parent_func_space, [])
     chain.append(wrapped_func_space)
