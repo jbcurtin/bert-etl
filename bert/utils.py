@@ -352,7 +352,7 @@ def flush_db():
         from bert import constants, datasource
         redis_connection: datasource.RedisConnection = datasource.RedisConnection.ParseURL(constants.REDIS_URL)
         logger.info(f'Flushing Redis DB[{redis_connection.db}]')
-        redis_connection.client.flushdb()
+        redis_connection.client().flushdb()
 
     else:
         raise NotImplementedError(constants.QueueType)

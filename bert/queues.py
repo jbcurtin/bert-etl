@@ -147,7 +147,8 @@ class RedisQueue(BaseQueue):
     _redis_client: 'redis-client'
     def __init__(self, table_name: str) -> None:
         super(RedisQueue, self).__init__(table_name)
-        self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client
+        self._redis_client = bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client()
+        self._redis_client_async = None
 
     def flushdb(self) -> None:
         self._redis_client.flushdb()
@@ -157,6 +158,16 @@ class RedisQueue(BaseQueue):
 
     def size(self: PWN) -> int:
         return int(self._redis_client.llen(self._table_name))
+
+    async def _resolve_connection(self: PWN) -> None:
+        if self._redis_client_async is None:
+            self._redis_client_async = await bert_datasource.RedisConnection.ParseURL(bert_constants.REDIS_URL).client_async()
+
+        return self._redis_client_async
+
+    async def size_async(self: PWN) -> int:
+        await self._resolve_connection()
+        return int(await self._redis_client_async.execute('llen', self._table_name))
 
     def get(self) -> QueueItem:
         try:
@@ -170,6 +181,16 @@ class RedisQueue(BaseQueue):
 
             return bert_encoders.decode_object(json.loads(value)['datum'])
 
+    async def get_async(self: PWN, prefetch: int = 1) -> typing.List[QueueItem]:
+        await self._resolve_connection()
+        list_len = await self._redis_client_async.execute('llen', self._table_name)
+        batch = await self._redis_client_async.execute('lrange', self._table_name, 0, prefetch - 1)
+        if batch:
+            await self._redis_client_async.execute('ltrim', self._table_name, len(batch), list_len)
+            return [bert_encoders.decode_object(json.loads(value.decode(bert_constants.ENCODING))['datum']) for value in batch]
+
+        return []
+
     def put(self: PWN, value: typing.Dict[str, typing.Any]) -> None:
         encoded_value = json.dumps(bert_encoders.encode_object({
             'identity': 'local-queue',
@@ -178,6 +199,13 @@ class RedisQueue(BaseQueue):
         # self._cache_backend.store(encoded_value)
         self._redis_client.rpush(self._table_name, encoded_value)
 
+    async def put_async(self: PWN, values: typing.List[typing.Dict[str, typing.Any]]) -> None:
+        await self._resolve_connection()
+        encoded_values = [json.dumps(bert_encoders.encode_object({
+            'identity': 'local-queue',
+            'datum': value,
+        })).encode(bert_constants.ENCODING) for value in values]
+        await self._redis_client_async.execute('rpush', self._table_name, *encoded_values)
 
 class StreamingQueue(DynamodbQueue):
     """

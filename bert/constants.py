@@ -8,6 +8,7 @@ import typing
 
 from urllib.parse import urlparse
 
+PWN = typing.TypeVar('PWN')
 NOOP: str = 'noop'
 DNS: str = '8.8.8.8'
 ENCODING: str = 'utf-8'

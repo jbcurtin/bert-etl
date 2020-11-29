@@ -2,12 +2,21 @@ import collections
 import getpass
 import json
 import os
+import logging
 import redis
 import typing
 
+from bert.constants import PWN
+
 from urllib.parse import ParseResult, urlparse
 
-PWN = typing.TypeVar('PWN')
+logger = logging.getLogger(__name__)
+
+try:
+    import aioredis
+except ModuleNotFoundError:
+    logger.warning('Unable to import aioredis')
+
 class ENVVars:
     __slots__ = ('_env_vars', '_old_values')
     _env_vars: typing.Dict[str, str]
@@ -74,15 +83,30 @@ class Postgres(collections.namedtuple('Postgres', ['host', 'port', 'dbname', 'us
     del os.environ['PGUSER']
     del os.environ['PGPASSWORD']
 
-class RedisConnection(collections.namedtuple('RedisConnection', ['host', 'port', 'db', 'client'])):
-  __slots__ = ()
-  @classmethod
-  def ParseURL(cls: PWN, url: str) -> PWN:
-    parts: ParseResult = urlparse(url)
-    host, port = parts.netloc.split(':')
-    return cls(
-      host=host,
-      port=int(port),
-      db=parts.path.strip('/'),
-      client=redis.Redis(host=host, port=int(port), db=parts.path.strip('/')))
+class RedisConnection(typing.NamedTuple):
+    host: str
+    port: int
+    db: int
+    username: str
+    password: str
+    clients: typing.Dict[str, typing.Any] = {}
 
+    def client(self: PWN) -> redis.Redis:
+        cli = self.clients.get('client', None)
+        if cli is None:
+            self.clients['client'] = redis.Redis(host=self.host, port=self.port, db=self.db)
+
+        return self.clients['client']
+
+    async def client_async(self: PWN) -> 'aioredis.create_pool':
+        cli = self.clients.get('client-async', None)
+        if cli is None:
+            self.clients['client-async'] = await aioredis.create_pool([self.host, self.port], db=self.db, minsize=5, maxsize=10)
+
+        return self.clients['client-async']
+
+    @classmethod
+    def ParseURL(cls: PWN, url: str) -> PWN:
+        parts: ParseResult = urlparse(url)
+        host, port = parts.netloc.split(':')
+        return cls(host, int(port), int(parts.path.strip('/')), None, None)
