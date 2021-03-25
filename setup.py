@@ -61,7 +61,7 @@ setup(
         'redis==3.3.5',
         'marshmallow==2.19.5',
         'boto3==1.9.251',
-        'pyyaml==5.1.2',
+        'pyyaml==5.4',
         'GitPython==3.1.1',
     ],
     entry_points={
