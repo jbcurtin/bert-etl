@@ -1,3 +1,9 @@
+Support for this Python Library is very limited. Requirements and Python versions are out of date. It surved as a great sandbox to experiment with creating a high-level pythonic API to quickly process large amounts of information.
+
+If you're looking into HPC or processing large amounts of data. I recommend looking into better supported software.
+
+This repository takes some of its best ideas from solutions like Dask, Python's multiprocessing, and Zapa.
+
 [![Documentation Status](https://readthedocs.org/projects/bert-etl/badge/?version=latest)](https://bert-etl.readthedocs.io/en/latest/?badge=latest)
 
 # Bert
